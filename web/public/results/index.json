@@ -1,0 +1,37 @@
+[
+  {
+    "id": "E1",
+    "title": "Each crash, default parameters, β = 0",
+    "file": "e1.json"
+  },
+  {
+    "id": "E2",
+    "title": "Each crash, β = 0.3",
+    "file": "e2.json"
+  },
+  {
+    "id": "E3",
+    "title": "Sweep β from 0 to 0.5",
+    "file": "e3.json"
+  },
+  {
+    "id": "E4",
+    "title": "Sweep AMM liquidity (0.5×, 1×, 2×, 5×), β = 0.3",
+    "file": "e4.json"
+  },
+  {
+    "id": "E5",
+    "title": "Sweep R_MAX (0.1%–2% per block), β = 0.3",
+    "file": "e5.json"
+  },
+  {
+    "id": "E6",
+    "title": "Whipsaw path (synthetic −20%, +15%, −20%, +20%)",
+    "file": "e6.json"
+  },
+  {
+    "id": "E7",
+    "title": "One big dump vs slices on the same AMM",
+    "file": "e7.json"
+  }
+]

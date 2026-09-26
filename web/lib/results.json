@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2026-09-26T13:25:06.195Z",
+  "tests": {
+    "passed": 67,
+    "failed": 0
+  },
+  "invariants": {
+    "depth": 200,
+    "rows": [
+      {
+        "name": "invariant_I1_solvency",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I2_totalCollateral",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I3_totalDebt",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I4_noOvershoot",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I5_noGlideAboveComfort",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I6_tokenBalance",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      },
+      {
+        "name": "invariant_I7_glideDominatesCliff",
+        "passed": true,
+        "runs": 2000,
+        "calls": 400000
+      }
+    ]
+  },
+  "gas": {
+    "borrow": 84322,
+    "cliff_liquidate": 108415,
+    "pokeMany_20": 2032352,
+    "poke_100_blocks": 209945,
+    "poke_1_block": 199997,
+    "poke_idle": 44798
+  },
+  "attackA1": {
+    "naiveLossMusd": 201,
+    "guardedLossMusd": 0
+  },
+  "vectors": {
+    "glide": 50,
+    "engine": {
+      "amm": 25,
+      "router": 25,
+      "cliff": 25,
+      "poke": 25
+    },
+    "engineTotal": 100
+  },
+  "slippage": {
+    "totalSoldMeth": 20,
+    "slices": 40,
+    "cliffSlippageBps": 224,
+    "glideSlippageBps": 34,
+    "cliffPriceImpactBps": 387,
+    "glidePriceImpactBps": 0
+  },
+  "slither": {
+    "detectors": 102,
+    "results": 35
+  }
+}

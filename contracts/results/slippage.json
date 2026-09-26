@@ -1,0 +1,15 @@
+{
+  "arbBudgetPerStepMusd": "2000000000000000000000",
+  "cliffAvgPrice": "3421279683118614820479",
+  "cliffFinalPrice": "3364288633664340885872",
+  "cliffPriceImpactBps": 387,
+  "cliffSlippageBps": 224,
+  "glideAvgPrice": "3487766498865587664719",
+  "glideFinalPrice": "3500005247081443985137",
+  "glidePriceImpactBps": 0,
+  "glideSlippageBps": 34,
+  "oraclePrice": "3500000000000000000000",
+  "poolDepthMeth": "1000000000000000000000",
+  "slices": 40,
+  "totalSoldMeth": "20000000000000000000"
+}

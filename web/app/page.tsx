@@ -1,0 +1,130 @@
+import Link from "next/link";
+import { HeroChart } from "@/components/HeroChart";
+import { LossesAvoided } from "@/components/LossesAvoided";
+import { ProofStrip } from "@/components/ProofStrip";
+import { GlideStory } from "@/components/StoryChart";
+import { ButtonLink } from "@/components/ui";
+import { SliceVsDump } from "@/components/SliceVsDump";
+import { experiments, heroRun } from "@/lib/sim/data";
+
+// Why each property needs a chain, stated as a spec sheet rather than a slogan.
+const onchain: [string, string][] = [
+  ["Settlement every block", "A slice is sold and debt repaid every 2 seconds, around the clock. No clearing system in traditional finance settles that often."],
+  ["Sale and repayment in one transaction", "Collateral is sold and the loan repaid atomically. Either both happen or neither does, so nothing is left half-done between them."],
+  ["Anyone can run the next slice", "The rules, the collateral and every unwind are public, and poke() is open to anyone. The team's keeper is a convenience, not a dependency."],
+];
+
+export default function Home() {
+  const run = heroRun();
+  const e7 = experiments()?.e7.data;
+  return (
+    <>
+      {/* Night band: the flight deck. The chart is the hero, and it is real market data. */}
+      <section className="night">
+        <div className="mx-auto max-w-6xl px-4 pb-10 pt-12 sm:px-6 lg:pt-20">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end">
+            <h1 className="rise display text-[2.6rem] sm:text-6xl lg:text-7xl">
+              Sell at most <span className="text-safe">0.5% per block</span>, not half the loan at once.
+            </h1>
+            <div className="rise" style={{ ["--d" as string]: "120ms" }}>
+              <p className="max-w-[52ch] text-muted">
+                When a loan gets risky, most lending protocols let a liquidator repay up to half the debt in one transaction and
+                keep a bonus on the collateral it takes (8% in our comparison pool). Soft Landing sells a small slice every block
+                instead, near the market price, and stops once the loan is back above health 1.25.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <ButtonLink href="/app" variant="primary">
+                  Try it on testnet
+                </ButtonLink>
+                <ButtonLink href="/how-it-works">Read the mechanism</ButtonLink>
+              </div>
+            </div>
+          </div>
+          <p className="rise num mt-10 font-mono text-xs text-muted" style={{ ["--d" as string]: "220ms" }}>
+            glide starts below health 1.25 · max 0.5% of collateral per block · backstop below 1.02 · no liquidation bonus
+          </p>
+          <div className="rise mt-4" style={{ ["--d" as string]: "300ms" }}>
+            {run ? <HeroChart run={run} /> : <p className="text-sm text-muted">Run `npm run sim` in sim/ to generate the crash results.</p>}
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="how" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:items-end">
+          <h2 id="how" className="display text-3xl sm:text-4xl">One loan through a crash</h2>
+          <p className="max-w-[60ch] text-muted lg:justify-self-end">
+            The same 10 mETH loan under both designs, block by block, computed with the contract&rsquo;s own maths. The shaded
+            band is where Soft Landing sells; the cliff pool does nothing until health reaches 1.00.
+          </p>
+        </div>
+        <div className="mt-8">
+          <GlideStory />
+        </div>
+      </section>
+
+      {e7 && (
+        <section aria-labelledby="slices" className="border-y border-border bg-surface">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:items-end">
+              <h2 id="slices" className="display text-3xl sm:text-4xl">Why small slices cost less</h2>
+              <p className="max-w-[60ch] text-muted lg:justify-self-end">
+                Price impact grows faster than the size of a sale. Split the same sale into slices and let arbitrage refill the
+                pool in between, and each slice sells close to the market price.
+              </p>
+            </div>
+            <div className="mt-10">
+              <SliceVsDump e7={e7} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="evidence">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+          <h2 id="evidence" className="display text-3xl sm:text-4xl">What we measured</h2>
+          <p className="mt-3 max-w-[62ch] text-muted">
+            Including an attack we ran against our own router. Each figure is generated by a script from the test output, not
+            typed in.
+          </p>
+          <div className="mt-8">
+            <ProofStrip />
+          </div>
+          <div className="mt-10 border-t border-border pt-6">
+            <LossesAvoided />
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="why" className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+          <h2 id="why" className="display text-3xl sm:text-4xl">Why this has to be onchain</h2>
+          <dl className="mt-8 divide-y divide-border border-y border-border">
+            {onchain.map(([k, v]) => (
+              <div key={k} className="grid gap-1 py-4 sm:grid-cols-[18rem_1fr] sm:gap-8">
+                <dt className="font-medium">{k}</dt>
+                <dd className="max-w-[62ch] text-muted">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <section aria-labelledby="cta" className="night">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-14 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:py-20">
+          <div>
+            <h2 id="cta" className="display text-3xl sm:text-5xl">Open a loan and watch it glide.</h2>
+            <p className="mt-3 text-muted">
+              Free test tokens, a real position and its cliff-pool twin, about 90 seconds.{" "}
+              <Link href="/simulate" className="text-text underline underline-offset-4">
+                Or replay a crash without a wallet.
+              </Link>
+            </p>
+          </div>
+          <ButtonLink href="/app" variant="primary" className="shrink-0">
+            Open the app
+          </ButtonLink>
+        </div>
+      </section>
+    </>
+  );
+}

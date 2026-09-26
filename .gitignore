@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# secrets
+.env
+.env.*
+!.env.example
+offline/*.key
+
+# foundry
+contracts/out
+contracts/cache
+contracts/broadcast/*/*/run-latest.json
+contracts/results/test-output.txt
+contracts/out-slither
+contracts/cache-slither
+contracts/results/*-output.txt
+
+# indexer (Ponder's embedded database and build cache)
+indexer/.ponder
+indexer/generated
+
+# keeper seed script: burner wallet keys (the addresses go to contracts/deployments/seeded.json)
+keeper/.seed-keys.json
+
+# not published: internal build briefs and AI design skills
+md/
+skill/
+.claude/

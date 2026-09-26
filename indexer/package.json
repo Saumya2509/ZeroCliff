@@ -1,0 +1,25 @@
+{
+  "name": "soft-landing-indexer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "hono": "4.13.9",
+    "ponder": "0.17.12",
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.2"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

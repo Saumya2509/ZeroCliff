@@ -1,0 +1,12 @@
+{
+  "name": "soft-landing-sim",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "node fetch-crashes.mjs",
+    "sim": "tsx cli.ts --all --out ../web/public/results"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}

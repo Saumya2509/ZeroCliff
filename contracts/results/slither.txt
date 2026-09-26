@@ -1,0 +1,192 @@
+C:\Users\Admin\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.6.0)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+'forge clean' running (wd: F:\Onchain\onchain\contracts)
+'forge config --json' running
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: F:\Onchain\onchain\contracts)
+INFO:Detectors:
+Detector: divide-before-multiply
+LendingPoolBase._health(uint256,uint256,uint256) (src/LendingPoolBase.sol#151-154) performs a multiplication on the result of a division:
+	- c * price / WAD * LT / d (src/LendingPoolBase.sol#153)
+SliceRouter.trySell(uint256,uint256,bool) (src/SliceRouter.sol#38-69) performs a multiplication on the result of a division:
+	- fair = amountIn * oraclePrice / 1e18 (src/SliceRouter.sol#56)
+	- minOut = fair * (10_000 - slipBps(backstop)) / 10_000 (src/SliceRouter.sol#57)
+SoftLandingPool.sNeeded(uint256,uint256,uint256) (src/SoftLandingPool.sol#100-106) performs a multiplication on the result of a division:
+	- rhs = c * price / WAD * LT / WAD (src/SoftLandingPool.sol#102)
+SoftLandingPool.backstopSlice(uint256,uint256,uint256,uint256) (src/SoftLandingPool.sol#126-135) performs a multiplication on the result of a division:
+	- rhs = c * price / WAD * LT / WAD (src/SoftLandingPool.sol#128)
+SoftLandingPool.backstopSlice(uint256,uint256,uint256,uint256) (src/SoftLandingPool.sol#126-135) performs a multiplication on the result of a division:
+	- execPrice = price * (10_000 - slipBps_) / 10_000 * (WAD - FEE) / WAD (src/SoftLandingPool.sol#130)
+SoftLandingPool.backstopSlice(uint256,uint256,uint256,uint256) (src/SoftLandingPool.sol#126-135) performs a multiplication on the result of a division:
+	- execPrice = price * (10_000 - slipBps_) / 10_000 * (WAD - FEE) / WAD (src/SoftLandingPool.sol#130)
+	- gain = H_COMFORT * execPrice / WAD (src/SoftLandingPool.sol#131)
+SoftLandingPool.previewPath(uint256,uint256,uint256,uint256) (src/SoftLandingPool.sol#152-172) performs a multiplication on the result of a division:
+	- repayAmt = s * price / WAD * (WAD - FEE) / WAD (src/SoftLandingPool.sol#164)
+INFO:Detectors:
+Detector: incorrect-equality
+LendingPoolBase._health(uint256,uint256,uint256) (src/LendingPoolBase.sol#151-154) uses a dangerous strict equality:
+	- d == 0 (src/LendingPoolBase.sol#152)
+LendingPoolBase.healthOf(address) (src/LendingPoolBase.sol#135-139) uses a dangerous strict equality:
+	- p.debt == 0 (src/LendingPoolBase.sol#137)
+SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226) uses a dangerous strict equality:
+	- n == 0 (src/SoftLandingPool.sol#188)
+SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226) uses a dangerous strict equality:
+	- s == 0 (src/SoftLandingPool.sol#211)
+INFO:Detectors:
+Detector: pyth-unchecked-confidence
+Pyth price conf field is not checked in PythOracleAdapter.getPrice() (src/PythOracleAdapter.sol#27-30)
+	- p = pyth.getPriceNoOlderThan(feedId,MAX_AGE) (src/PythOracleAdapter.sol#28)
+INFO:Detectors:
+Detector: reentrancy-no-eth
+Reentrancy in SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256) (src/SoftLandingPool.sol#232-258):
+	External calls:
+	- (ok,out) = _sell(s,price,true) (src/SoftLandingPool.sol#240)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#245)
+		- p.collateral -= s.toUint128() (src/SoftLandingPool.sol#274)
+		- p.debt -= repayAmt.toUint128() (src/SoftLandingPool.sol#276)
+		- p.lastGlideBlock = uint64(block.number) (src/SoftLandingPool.sol#278)
+	LendingPoolBase.positions (src/LendingPoolBase.sol#36) can be used in cross function reentrancies:
+	- LendingPoolBase.healthOf(address) (src/LendingPoolBase.sol#135-139)
+	- LendingPoolBase.positions (src/LendingPoolBase.sol#36)
+	- SoftLandingPool.previewGlide(address,int256,uint256) (src/SoftLandingPool.sol#139-149)
+	- p.debt = 0 (src/SoftLandingPool.sol#251)
+	LendingPoolBase.positions (src/LendingPoolBase.sol#36) can be used in cross function reentrancies:
+	- LendingPoolBase.healthOf(address) (src/LendingPoolBase.sol#135-139)
+	- LendingPoolBase.positions (src/LendingPoolBase.sol#36)
+	- SoftLandingPool.previewGlide(address,int256,uint256) (src/SoftLandingPool.sol#139-149)
+	- p.lastGlideBlock = uint64(block.number) (src/SoftLandingPool.sol#255)
+	LendingPoolBase.positions (src/LendingPoolBase.sol#36) can be used in cross function reentrancies:
+	- LendingPoolBase.healthOf(address) (src/LendingPoolBase.sol#135-139)
+	- LendingPoolBase.positions (src/LendingPoolBase.sol#36)
+	- SoftLandingPool.previewGlide(address,int256,uint256) (src/SoftLandingPool.sol#139-149)
+Reentrancy in SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226):
+	External calls:
+	- (ok,out) = _sell(s,price,false) (src/SoftLandingPool.sol#216)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#222)
+		- p.collateral -= s.toUint128() (src/SoftLandingPool.sol#274)
+		- p.debt -= repayAmt.toUint128() (src/SoftLandingPool.sol#276)
+		- p.lastGlideBlock = uint64(block.number) (src/SoftLandingPool.sol#278)
+	LendingPoolBase.positions (src/LendingPoolBase.sol#36) can be used in cross function reentrancies:
+	- LendingPoolBase.healthOf(address) (src/LendingPoolBase.sol#135-139)
+	- LendingPoolBase.positions (src/LendingPoolBase.sol#36)
+	- SoftLandingPool.previewGlide(address,int256,uint256) (src/SoftLandingPool.sol#139-149)
+Reentrancy in SoftLandingPool.poke(address) (src/SoftLandingPool.sol#64-67):
+	External calls:
+	- acted = _glide(user,true) (src/SoftLandingPool.sol#65)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- _payTip(msg.sender) (src/SoftLandingPool.sol#66)
+		- protocolFees -= t (src/SoftLandingPool.sol#289)
+	SoftLandingPool.protocolFees (src/SoftLandingPool.sol#33) can be used in cross function reentrancies:
+	- SoftLandingPool.protocolFees (src/SoftLandingPool.sol#33)
+Reentrancy in SoftLandingPool.pokeMany(address[]) (src/SoftLandingPool.sol#70-76):
+	External calls:
+	- _glide(users[i],true) (src/SoftLandingPool.sol#73)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- _payTip(msg.sender) (src/SoftLandingPool.sol#75)
+		- protocolFees -= t (src/SoftLandingPool.sol#289)
+	SoftLandingPool.protocolFees (src/SoftLandingPool.sol#33) can be used in cross function reentrancies:
+	- SoftLandingPool.protocolFees (src/SoftLandingPool.sol#33)
+INFO:Detectors:
+Detector: uninitialized-local
+SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256).shortfall (src/SoftLandingPool.sol#248) is a local variable never initialized
+SoftLandingPool._glide(address,bool).price (src/SoftLandingPool.sol#190) is a local variable never initialized
+SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256).repayAmt (src/SoftLandingPool.sol#238) is a local variable never initialized
+INFO:Detectors:
+Detector: unused-return
+LendingPoolBase._price() (src/LendingPoolBase.sol#146-149) ignores return value by (price,None) = oracle.getPrice() (src/LendingPoolBase.sol#147)
+SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226) ignores return value by (px) = oracle.getPrice() (src/SoftLandingPool.sol#194-199)
+INFO:Detectors:
+Detector: calls-loop
+LendingPoolBase._price() (src/LendingPoolBase.sol#146-149) has external calls inside a loop: (price,None) = oracle.getPrice() (src/LendingPoolBase.sol#147)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256) (src/SoftLandingPool.sol#232-258) has external calls inside a loop: s = backstopSlice(c,p.debt,price,router.slipBps(true)) (src/SoftLandingPool.sol#234)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+SoftLandingPool._sell(uint256,uint256,bool) (src/SoftLandingPool.sol#260-264) has external calls inside a loop: (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+		SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256)
+SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226) has external calls inside a loop: (px) = oracle.getPrice() (src/SoftLandingPool.sol#194-199)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+INFO:Detectors:
+Detector: reentrancy-benign
+Reentrancy in SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256) (src/SoftLandingPool.sol#232-258):
+	External calls:
+	- (ok,out) = _sell(s,price,true) (src/SoftLandingPool.sol#240)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- badDebt += shortfall (src/SoftLandingPool.sol#253)
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#245)
+		- protocolFees += feeAmt (src/SoftLandingPool.sol#272)
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#245)
+		- totalCollateral -= s (src/SoftLandingPool.sol#275)
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#245)
+		- totalDebt -= repayAmt (src/SoftLandingPool.sol#277)
+	- totalDebt -= shortfall (src/SoftLandingPool.sol#252)
+Reentrancy in SoftLandingPool._glide(address,bool) (src/SoftLandingPool.sol#181-226):
+	External calls:
+	- (ok,out) = _sell(s,price,false) (src/SoftLandingPool.sol#216)
+		- (ok,out) = router.trySell(s,price,backstop) (src/SoftLandingPool.sol#262)
+	State variables written after the call(s):
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#222)
+		- protocolFees += feeAmt (src/SoftLandingPool.sol#272)
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#222)
+		- totalCollateral -= s (src/SoftLandingPool.sol#275)
+	- repayAmt = _applySale(user,p,s,out) (src/SoftLandingPool.sol#222)
+		- totalDebt -= repayAmt (src/SoftLandingPool.sol#277)
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in SliceRouter.trySell(uint256,uint256,bool) (src/SliceRouter.sol#38-69):
+	External calls:
+	- out = amm.swapAForB(amountIn,minOut,msg.sender) (src/SliceRouter.sol#66)
+	Event emitted after the call(s):
+	- SliceSold(msg.sender,amountIn,out,oraclePrice,backstop) (src/SliceRouter.sol#68)
+INFO:Detectors:
+Detector: timestamp
+MockOracle.getPrice() (src/mocks/MockOracle.sol#43-46) uses timestamp for comparisons
+	Dangerous comparisons:
+	- maxAge != 0 && block.timestamp > updatedAt + maxAge (src/mocks/MockOracle.sol#44)
+MockToken.faucet() (src/mocks/MockToken.sol#29-35) uses timestamp for comparisons
+	Dangerous comparisons:
+	- last != 0 && block.timestamp < last + FAUCET_COOLDOWN (src/mocks/MockToken.sol#31)
+INFO:Detectors:
+Detector: costly-loop
+SoftLandingPool._applySale(address,LendingPoolBase.Position,uint256,uint256) (src/SoftLandingPool.sol#267-284) has costly operations inside a loop:
+	- protocolFees += feeAmt (src/SoftLandingPool.sol#272)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+		SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256)
+SoftLandingPool._applySale(address,LendingPoolBase.Position,uint256,uint256) (src/SoftLandingPool.sol#267-284) has costly operations inside a loop:
+	- totalCollateral -= s (src/SoftLandingPool.sol#275)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+		SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256)
+SoftLandingPool._applySale(address,LendingPoolBase.Position,uint256,uint256) (src/SoftLandingPool.sol#267-284) has costly operations inside a loop:
+	- totalDebt -= repayAmt (src/SoftLandingPool.sol#277)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+		SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256)
+SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256) (src/SoftLandingPool.sol#232-258) has costly operations inside a loop:
+	- totalDebt -= shortfall (src/SoftLandingPool.sol#252)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+SoftLandingPool._backstop(address,LendingPoolBase.Position,uint256) (src/SoftLandingPool.sol#232-258) has costly operations inside a loop:
+	- badDebt += shortfall (src/SoftLandingPool.sol#253)
+	Calls stack containing the loop:
+		SoftLandingPool.pokeMany(address[])
+		SoftLandingPool._glide(address,bool)
+INFO:Slither:. analyzed (31 contracts with 102 detectors), 35 result(s) found

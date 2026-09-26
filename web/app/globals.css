@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+/*
+ * Tokens: primitive → semantic → Tailwind theme.
+ * Primitives are the Manali palette from 04-frontend-web-app.md. Components only use semantic tokens.
+ * Text colours were checked against WCAG AA (≥ 4.5:1). Amber and mist fail as text on snowfield, so
+ * text uses the darker "ink" variants; amber and mist stay for fills and gridlines.
+ * Red is reserved for the cliff pool, so the comparison reads instantly.
+ */
+
+:root {
+  /* primitives */
+  --sky-slate: #2e3a4f;
+  --snowfield: #f7f9fb;
+  --deodar: #2f5d50;
+  --signal-amber: #e0a526;
+  --ridge-red: #b8402f;
+  --mist: #8a96a8;
+
+  /* semantic, light */
+  --bg: var(--snowfield);
+  --surface: #ffffff;
+  --surface-sunken: #eef2f6;
+  --border: #d9e0e8;
+  --grid: #e3e8ee;
+  --text: var(--sky-slate);
+  --text-muted: #5b6678; /* 5.5:1 */
+  --safe: var(--deodar); /* 7.1:1 */
+  --safe-fill: var(--deodar);
+  --on-safe: #ffffff;
+  --glide-fill: var(--signal-amber);
+  --glide-text: #8a5a00; /* 5.6:1 */
+  --on-glide: var(--sky-slate); /* 5.2:1 on amber */
+  --cliff: var(--ridge-red); /* 5.2:1 */
+  --cliff-fill: var(--ridge-red);
+  --focus: #1d5fd1;
+  --chart-price: var(--mist);
+
+  /* Instrument panels, not app cards: tight corners, hairline borders, no drop shadows. */
+  --radius-sm: 3px;
+  --radius-lg: 4px;
+  --shadow-card: none;
+}
+
+/* dark: lighter tonal variants, each re-checked (≥ 5.3:1 on bg and cards) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a24;
+    --surface: #1c2431;
+    --surface-sunken: #19202b;
+    --border: #2c3747;
+    --grid: #253040;
+    --text: #e8edf3;
+    --text-muted: #9aa6b8;
+    --safe: #6fb39c;
+    --safe-fill: #3f7a68;
+    --glide-fill: #f0be4f;
+    --glide-text: #f0be4f;
+    --cliff: #e27a68;
+    --cliff-fill: #e27a68;
+    --focus: #7fb0ff;
+    --chart-price: #7d8aa0;
+    --shadow-card: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a24;
+  --surface: #1c2431;
+  --surface-sunken: #19202b;
+  --border: #2c3747;
+  --grid: #253040;
+  --text: #e8edf3;
+  --text-muted: #9aa6b8;
+  --safe: #6fb39c;
+  --safe-fill: #3f7a68;
+  --glide-fill: #f0be4f;
+  --glide-text: #f0be4f;
+  --cliff: #e27a68;
+  --cliff-fill: #e27a68;
+  --focus: #7fb0ff;
+  --chart-price: #7d8aa0;
+  --shadow-card: none;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-safe: var(--safe);
+  --color-safe-fill: var(--safe-fill);
+  --color-on-safe: var(--on-safe);
+  --color-glide: var(--glide-text);
+  --color-glide-fill: var(--glide-fill);
+  --color-on-glide: var(--on-glide);
+  --color-cliff: var(--cliff);
+  --color-cliff-fill: var(--cliff-fill);
+  --color-focus: var(--focus);
+  --radius-sm: var(--radius-sm);
+  --radius-lg: var(--radius-lg);
+  --shadow-card: var(--shadow-card);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+/*
+ * Night panels: the hero, the closing band and instrument faces are always dark, in either theme.
+ * Scoping the dark semantic tokens here means every component inside adapts automatically, with the
+ * same contrast-checked values as dark mode.
+ */
+.night {
+  --bg: #0e1420;
+  --surface: #151d2b;
+  --surface-sunken: #111827;
+  --border: #283447;
+  --grid: #1f2a3b;
+  --text: #e8edf3;
+  --text-muted: #9aa6b8;
+  --safe: #6fb39c;
+  --safe-fill: #3f7a68;
+  --glide-fill: #f0be4f;
+  --glide-text: #f0be4f;
+  --cliff: #e27a68;
+  --cliff-fill: #e27a68;
+  --focus: #7fb0ff;
+  --chart-price: #7d8aa0;
+  --shadow-card: none;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+}
+
+/* Headlines: the same engineered sans as the body, set heavy and tight. No italic accent words. */
+.display {
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+/* Instrument-style eyebrow labels */
+.eyebrow {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Motion: strong custom ease-out (built-in easings are too weak), short staggers, never looping. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+.rise {
+  animation: rise 700ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.grow-x {
+  transform-origin: left center;
+  animation: grow-x 1100ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.drop {
+  animation: drop-in 500ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+/* Held until the element scrolls into view (see useInView). */
+[data-inview="false"] .on-view {
+  animation-play-state: paused;
+}
+
+html {
+  color-scheme: light dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+
+/* every number is tabular so values don't jitter as they update */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button,
+[role="button"],
+a,
+select,
+input[type="range"] {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
