@@ -24,7 +24,7 @@ Everything in step 0 was prepared and checked on 27 September 2026. Steps 1–7 
 
 **Where the Pyth values come from.** Pyth's deployment registry (`contract_manager/src/store/contracts/EvmPriceFeedContracts.json` in `pyth-network/pyth-crosschain`) lists two contracts for Base Sepolia. On-chain, `0x5f52…EB83` had an ETH/USD price 25 seconds old, while `0xA2aa…5729` was 31 hours stale, so we use `0x5f52…`. It supports `getPriceNoOlderThan`, which the adapter calls. The feed ID is Hermes's `Crypto.ETH/USD`.
 
-**Important: Pyth now needs an API key.** Since the Pyth Core upgrade on 26 August 2026, Hermes returns HTTP 401 to price-update requests without an API key. The keeper now uses `https://pyth.dourolabs.app/hermes` and sends `PYTH_API_KEY` as `Authorization: Bearer`. On Base Sepolia, Pyth's own ETH/USD pushes were about 4 minutes apart, but our adapter accepts prices at most 60 s old. A read with a 60 s limit reverted with Pyth's `StalePrice` error. So the keeper must push prices, and **the key is required**.
+**No Pyth API key needed.** Since the Pyth Core upgrade (26 August 2026), Hermes refuses price-update requests without a paid API key, so our keeper can't push prices for free. Pyth pushes ETH/USD on Base Sepolia itself. We measured the gaps: usually 249–255 s, but once 2,952 s (49 minutes). So the adapter is deployed with `PYTH_MAX_AGE=3600`, accepting prices up to an hour old, and the keeper's oracle pusher stays off. The trade-off: on the testnet the price can be up to an hour stale; with a key, set `PYTH_MAX_AGE=60` and `PYTH_API_KEY` to push fresh prices every 30 s.
 
 ### Still to do (needs you)
 
@@ -32,7 +32,7 @@ Everything in step 0 was prepared and checked on 27 September 2026. Steps 1–7 
    - deployer `0x8059D29dBC9DF87916A601E07FfA0a9B1112E041`: about **0.1 ETH**. Deploying costs ~0.0001, but seeding 40 test positions sends 0.002 ETH of gas money to each wallet.
    - keeper `0x1D2Cc77a250E0EA2BB11ee1D347aF7529babf85a`: at least **0.05 ETH**. It pays gas for every poke, arbitrage and price push, plus Pyth's update fee.
    - Check: `cast balance <address> --ether --rpc-url https://sepolia.base.org`
-2. **Pyth API key:** sign up at Pyth Terminal (free trial, then paid). You'll paste it into the keeper's hosting settings in step 3.
+2. **Pyth API key:** not needed (see above). Only if you want 60-second-fresh prices: get one from Pyth Terminal (paid) and redeploy with `PYTH_MAX_AGE=60`.
 3. **Explorer API key** (for "Verified" source code): an Etherscan-family API key that covers Base Sepolia. Put it in `.env` as `EXPLORER_API_KEY`. Without it, the deploy still works, just unverified.
 4. **WalletConnect project ID** (optional): from WalletConnect/Reown Cloud. Without it only browser wallets (MetaMask and similar) can connect, which is fine for judges on laptops.
 5. **Push the latest commits to GitHub** (`git push`), because Railway and Vercel build from GitHub.
@@ -114,15 +114,13 @@ The public RPC is rate-limited. If the logs show many retries, use a free RPC ke
    CHAIN_ID=84532
    MODE=live
    KEEPER_PRIVATE_KEY=<the KEEPER_PRIVATE_KEY line from your .env>
-   PYTH_API_KEY=<from Pyth Terminal>
    ```
 4. Check the logs:
-   - `"starting"` lists `oraclePusher: true`
-   - within about 30 s: `"pushed Pyth update"`
+   - `"starting"` lists `oraclePusher: false`
    - every 60 s: `"summary"` with the gas balance
-   - no `PYTH_API_KEY is not set` warning
+   - `"oracle pusher off: relying on Pyth's scheduled price pushes"` with `maxAgeS: "3600"`
 
-The keeper must run 24/7. The adapter rejects prices older than 60 s, so when it stops, borrowing and pokes fail until it runs again. Watch for `keeper gas balance low` and top up the keeper wallet.
+The keeper must run 24/7: it glides positions, liquidates ghosts and keeps the AMM in line with the oracle. Watch for `keeper gas balance low` and top up the keeper wallet.
 
 ---
 

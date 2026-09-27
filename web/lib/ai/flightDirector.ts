@@ -300,6 +300,8 @@ export type Context = Position & { sigma: number; sigmaSource: "measured" | "ass
 
 const f = (x: number, d = 2) => x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pctS = (x: number, d = 1) => `${f(x, d)}%`;
+/** Health truncated to 2 decimals, like formatHealth and the contract: 1.4875 shows as 1.48, never 1.49. */
+const fh = (x: number) => f(Math.floor(x * 100 + 1e-9) / 100);
 const prob = (x: number) => (x < 0.01 ? "under 1%" : x > 0.99 ? "over 99%" : `${Math.round(x * 100)}%`);
 
 /** A price level and how far below today it is, or that the price is already past it. */
@@ -321,10 +323,10 @@ export function briefing(ctx: Context): Advice {
   const p8 = touchProbability(t.glideDropPct, ctx.sigma, 8);
   const headline =
     status === "CLEAR_SKIES"
-      ? `Clear skies · health ${f(t.health)}`
+      ? `Clear skies · health ${fh(t.health)}`
       : status === "MILD_TURBULENCE"
-        ? `Gliding · health ${f(t.health)}`
-        : `Backstop range · health ${f(t.health)}`;
+        ? `Gliding · health ${fh(t.health)}`
+        : `Backstop range · health ${fh(t.health)}`;
   const lines =
     status === "CLEAR_SKIES"
       ? [`ETH can fall ${pctS(t.glideDropPct)} (to ${f(t.glidePrice)}) before any collateral is sold.`, `Chance of reaching that level in the next 8 hours: ${prob(p8)} (volatility ${pctS(ctx.sigma * 100, 0)} a year, ${ctx.sigmaSource}).`]
@@ -336,9 +338,9 @@ export function briefing(ctx: Context): Advice {
     headline,
     lines,
     figures: [
-      { label: "Protection starts at", value: level(t.glidePrice, t.glideDropPct) },
-      { label: "Floor backstop cushion", value: level(t.floorPrice, t.floorDropPct) },
-      { label: "Competitor pool wipes at", value: level(t.cliffPrice, t.cliffDropPct) },
+      { label: "Glide starts at", value: level(t.glidePrice, t.glideDropPct) },
+      { label: "Backstop at", value: level(t.floorPrice, t.floorDropPct) },
+      { label: "Normal pool liquidates at", value: level(t.cliffPrice, t.cliffDropPct) },
     ],
   };
 }
@@ -353,16 +355,16 @@ function stressAdvice(ctx: Context, dropPct: number, assumed: boolean, compare: 
   const note = assumed ? ` (no size given, so ${dropPct}% is assumed)` : "";
   const lines: string[] = [];
   if (fc.kind === "safe") {
-    lines.push(`After a ${dropPct}% fall${note}, health would be ${f(h)}, still above 1.25. Nothing is sold.`);
+    lines.push(`After a ${dropPct}% fall${note}, health would be ${fh(h)}, still above 1.25. Nothing is sold.`);
   } else if (fc.kind === "glide") {
-    lines.push(`After a ${dropPct}% fall${note}, health would be ${f(h)}. Soft Landing would sell ${f(soldEth, 4)} mETH over about ${fc.settleBlocks} blocks, back to 1.25.`);
+    lines.push(`After a ${dropPct}% fall${note}, health would be ${fh(h)}. Soft Landing would sell ${f(soldEth, 4)} mETH over about ${fc.settleBlocks} blocks, back to 1.25.`);
   } else {
-    lines.push(`After a ${dropPct}% fall${note}, health would be ${f(h)}, below the 1.02 floor. The backstop would sell ${f(soldEth, 4)} mETH at once${fc.closeOut ? ", all of it, and the rest of the debt would be written off" : ""}.`);
+    lines.push(`After a ${dropPct}% fall${note}, health would be ${fh(h)}, below the 1.02 floor. The backstop would sell ${f(soldEth, 4)} mETH at once${fc.closeOut ? ", all of it, and the rest of the debt would be written off" : ""}.`);
   }
   if (fc.cliff.liquidated) {
     lines.push(`The same loan in a normal pool would be liquidated: ${f(cliffEth, 4)} mETH seized for ${f(num(fc.cliff.repaid), 0)} mUSD of debt, an 8% bonus to the liquidator.`);
   } else if (compare) {
-    lines.push(`A normal pool would do nothing yet: health ${f(h)} is above its 1.00 cliff. It acts later, all at once.`);
+    lines.push(`A normal pool would do nothing yet: health ${fh(h)} is above its 1.00 cliff. It acts later, all at once.`);
   }
   const extra = num(fc.cost.cliff) - num(fc.cost.soft);
   if (fc.kind !== "safe" || fc.cliff.liquidated) {
@@ -377,7 +379,7 @@ function stressAdvice(ctx: Context, dropPct: number, assumed: boolean, compare: 
     headline: `${compare ? "Soft Landing vs a normal pool" : "Stress test"} · ETH −${dropPct}%`,
     lines,
     figures: [
-      { label: "Health after the fall", value: f(h) },
+      { label: "Health after the fall", value: fh(h) },
       { label: "Soft Landing sells", value: `${f(soldEth, 4)} mETH` },
       { label: "Normal pool seizes", value: `${f(cliffEth, 4)} mETH` },
     ],
@@ -413,7 +415,7 @@ export function answer(intent: Intent, ctx: Context): Advice {
     case "THRESHOLDS": {
       if (!has) return needPosition("Price levels");
       const b = briefing(ctx);
-      return { ...b, headline: "Price levels for this loan", lines: [`Current price ${f(price)}, health ${f(thresholds(ctx).health)}.`] };
+      return { ...b, headline: "Price levels for this loan", lines: [`Current price ${f(price)}, health ${fh(thresholds(ctx).health)}.`] };
     }
 
     case "STRESS_TEST":

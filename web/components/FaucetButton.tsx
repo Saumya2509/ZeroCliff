@@ -4,6 +4,7 @@ import { useAccount } from "wagmi";
 import { useBalances } from "@/hooks/usePosition";
 import { useTxSequence } from "@/hooks/useTxSequence";
 import { mETH, mUSD } from "@/lib/contracts";
+import { formatToken } from "@/lib/format";
 import { send } from "@/lib/tx";
 import { TxProgress } from "./TxProgress";
 import { Button } from "./ui";
@@ -22,19 +23,17 @@ export function FaucetButton() {
 
   return (
     <div>
-      <Button
-        onClick={claim}
-        disabled={!address || tx.running}
-        className="flex items-center gap-1.5 py-1 px-2.5 text-xs font-semibold bg-surface border border-border/80 hover:border-safe active:scale-95 transition-all"
-      >
-        <span>💧</span>
-        <span>{tx.running ? "Minting…" : "+ Faucet"}</span>
-      </Button>
-      {tx.running && (
-        <div className="absolute right-4 top-16 z-50 w-72 rounded-lg border border-border bg-bg/95 p-3 shadow-xl backdrop-blur">
-          <TxProgress steps={tx.steps} error={tx.error} onRetry={claim} />
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={claim} disabled={!address || tx.running}>
+          {tx.running ? "Claiming…" : "Get test tokens"}
+        </Button>
+        {address && (
+          <p className="num text-sm text-muted">
+            Wallet: {formatToken(meth, "mETH")} · {formatToken(musd, "mUSD")}
+          </p>
+        )}
+      </div>
+      <TxProgress steps={tx.steps} error={tx.error} onRetry={claim} />
     </div>
   );
 }

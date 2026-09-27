@@ -1,47 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Address } from "viem";
 import { useBalances, type Position } from "@/hooks/usePosition";
 import { useTxSequence, type TxStep } from "@/hooks/useTxSequence";
+import { thresholds } from "@/lib/ai/flightDirector";
 import { cliff, mETH, mUSD, pool } from "@/lib/contracts";
-import { formatHealth, formatPrice, formatToken, parseAmount } from "@/lib/format";
-import { H_COMFORT, H_OPEN, health, LT, WAD } from "@/lib/sim/glide";
+import { formatHealth, formatPrice, formatToken, healthState, parseAmount } from "@/lib/format";
+import { H_OPEN, health, LT, WAD } from "@/lib/sim/glide";
 import { approveIfNeeded, send } from "@/lib/tx";
-import { Sparkles, Bot, Zap, CheckCircle2, ShieldCheck, AlertTriangle } from "lucide-react";
 import { TxProgress } from "./TxProgress";
-import { Button } from "./ui";
+import { Button, StatusBadge } from "./ui";
 
 type Tab = "deposit" | "borrow" | "repay" | "withdraw";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "deposit", label: "Deposit" },
-  { id: "borrow", label: "Borrow" },
-  { id: "repay", label: "Repay" },
-  { id: "withdraw", label: "Withdraw" },
+const TABS: { id: Tab; label: string; hint: string; cta: string }[] = [
+  { id: "deposit", label: "Deposit", hint: "Add mETH collateral. Raises health.", cta: "Deposit" },
+  { id: "borrow", label: "Borrow", hint: "Borrow more mUSD. Health must stay at or above 1.40.", cta: "Borrow" },
+  { id: "repay", label: "Repay", hint: "Pay back mUSD. Raises health.", cta: "Repay" },
+  { id: "withdraw", label: "Withdraw", hint: "Take mETH back. Health must stay at or above 1.40.", cta: "Withdraw" },
 ];
 
-const TAB_DESCRIPTIONS: Record<Tab, { hint: string; cta: string }> = {
-  deposit: {
-    hint: "Deposit mETH to strengthen collateral backing and raise your safety score.",
-    cta: "Deposit Collateral",
-  },
-  borrow: {
-    hint: "Borrow mUSD stablecoins against collateral. The system keeps you safely above the 1.40 limit.",
-    cta: "Borrow mUSD",
-  },
-  repay: {
-    hint: "Repay borrowed mUSD debt to increase your safety score and lower liquidation risk.",
-    cta: "Repay Debt",
-  },
-  withdraw: {
-    hint: "Safely withdraw surplus mETH collateral back to your wallet.",
-    cta: "Withdraw Collateral",
-  },
-};
+/** Opening health the suggestion aims for: comfortably above the 1.40 limit. */
+const SUGGESTED_HEALTH = 1_600_000_000_000_000_000n;
 
 /** Max debt that keeps health ≥ H_OPEN, minus existing debt. */
 function maxBorrow(c: bigint, d: bigint, price: bigint) {
-  const cap = ((c * price) / WAD) * LT / H_OPEN;
+  const cap = (((c * price) / WAD) * LT) / H_OPEN;
   return cap > d ? cap - d : 0n;
 }
 
@@ -66,6 +50,16 @@ export function ActionPanel({
 
 // ---------- first-time flow ----------
 
+/** A comfortable starting loan for this wallet: up to 1 mETH (per pool), borrowing to health 1.60. */
+function suggestion(meth: bigint, price: bigint, withGhost: boolean) {
+  const perPool = withGhost ? meth / 2n : meth;
+  let c = perPool > 0n && perPool < WAD ? perPool : WAD;
+  c -= c % 10n ** 14n; // 4 decimals
+  const raw = (((c * price) / WAD) * LT) / SUGGESTED_HEALTH;
+  const d = raw - (raw % (10n * WAD)); // whole tens of mUSD
+  return { c, d };
+}
+
 function OpenPositionForm({
   user,
   price,
@@ -78,83 +72,54 @@ function OpenPositionForm({
   const { meth } = useBalances(user);
   const tx = useTxSequence();
   const ids = { col: useId(), debt: useId(), colHelp: useId(), debtHelp: useId(), ghost: useId() };
-
-  const [colIn, setColIn] = useState("1");
-  const [debtIn, setDebtIn] = useState("1450");
   const [withGhost, setWithGhost] = useState(true);
-  const initializedRef = useRef(false);
+  // Until the user types, the form shows the suggestion (kept current as price and balance load);
+  // after that it shows exactly what they typed.
+  const [edited, setEdited] = useState(false);
+  const [colUser, setColUser] = useState("");
+  const [debtUser, setDebtUser] = useState("");
 
-  const calculateAiParams = useCallback((ethBal: bigint, currentPrice?: bigint, ghost: boolean = true) => {
-    const p = currentPrice ?? (2500n * WAD);
-    // AI Default target collateral: 1 mETH
-    let targetCol = 1n * WAD;
-    const multiplier = ghost ? 2n : 1n;
-    if (ethBal > 0n && ethBal < targetCol * multiplier) {
-      targetCol = (ethBal * 9n) / (10n * multiplier);
-    }
-    if (targetCol <= 0n) targetCol = 1n * WAD;
+  const suggested = price ? suggestion(meth, price, withGhost) : undefined;
+  const colIn = edited ? colUser : suggested ? formatInput(suggested.c) : "";
+  const debtIn = edited ? debtUser : suggested ? formatInput(suggested.d) : "";
 
-    // Comfort health target = 1.45 (Optimal risk/reward)
-    // Debt = (C * P * 0.85) / 1.45
-    const colValUsd = (targetCol * p) / WAD;
-    const maxSafeDebt = (colValUsd * LT) / H_COMFORT;
-    const debtUnits = maxSafeDebt / WAD;
-    const roundedDebtUnits = (debtUnits / 10n) * 10n;
-    const targetDebt = roundedDebtUnits > 0n ? roundedDebtUnits * WAD : maxSafeDebt;
+  const update = (col: string, debt: string) => {
+    setEdited(true);
+    setColUser(col);
+    setDebtUser(debt);
+  };
 
-    return {
-      colStr: formatInput(targetCol),
-      debtStr: roundedDebtUnits > 0n ? roundedDebtUnits.toString() : formatInput(targetDebt),
-      targetCol,
-      targetDebt,
-    };
-  }, []);
-
-  // Autonomous auto-configuration on load
+  // The dashboard previews health and forecasts from these amounts.
   useEffect(() => {
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      const { colStr, debtStr, targetCol, targetDebt } = calculateAiParams(meth, price, withGhost);
-      setColIn(colStr);
-      setDebtIn(debtStr);
-      onDraftChange({ collateral: targetCol, debt: targetDebt });
-    }
-  }, [price, meth, withGhost, calculateAiParams, onDraftChange]);
+    onDraftChange({ collateral: parseAmount(colIn) ?? 0n, debt: parseAmount(debtIn) ?? 0n });
+  }, [colIn, debtIn, onDraftChange]);
 
   const c = parseAmount(colIn);
   const d = parseAmount(debtIn) ?? 0n;
   const need = c ? (withGhost ? c * 2n : c) : 0n;
   const h = c && price ? health(c, d, price) : undefined;
   const limit = c && price ? maxBorrow(c, 0n, price) : undefined;
+  const t = c && d > 0n && price ? thresholds({ collateral: c, debt: d, price }) : undefined;
 
-  const colError = !c || c === 0n ? "Enter collateral amount." : need > meth ? `Requires ${formatToken(need, "mETH")}. Claim test tokens first.` : undefined;
-  const debtError = h !== undefined && d > 0n && h < H_OPEN ? `Health ${formatHealth(h)} below 1.40 limit (max ${formatToken(limit ?? 0n, "mUSD")}).` : undefined;
+  const colError = !c || c === 0n ? "Enter an amount." : need > meth ? `Needs ${formatToken(need, "mETH")}${withGhost ? " (half for the ghost)" : ""}. Get test tokens first.` : undefined;
+  const debtError = h !== undefined && d > 0n && h < H_OPEN ? `Health would be ${formatHealth(h)}; the pool needs at least 1.40 (borrow up to ${formatToken(limit ?? 0n, "mUSD")}).` : undefined;
   const invalid = !!colError || !!debtError || !price;
+  const txCount = (d > 0n ? 3 : 2) * (withGhost ? 2 : 1);
 
-  const update = (col: string, debt: string) => {
-    setColIn(col);
-    setDebtIn(debt);
-    onDraftChange({ collateral: parseAmount(col) ?? 0n, debt: parseAmount(debt) ?? 0n });
-  };
-
-  const applyAiOptimal = () => {
-    const { colStr, debtStr, targetCol, targetDebt } = calculateAiParams(meth, price, withGhost);
-    update(colStr, debtStr);
-  };
-
-  const colChips = [
-    { label: "25%", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 8n : meth / 4n), debtIn) },
-    { label: "50%", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 4n : meth / 2n), debtIn) },
-    { label: "75%", onClick: () => meth > 0n && update(formatInput(withGhost ? (meth * 3n) / 8n : (meth * 3n) / 4n), debtIn) },
-    { label: "MAX", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 2n : meth), debtIn) },
-  ];
-
-  const debtChips = limit && limit > 0n ? [
-    { label: "25%", onClick: () => update(colIn, formatInput(limit / 4n)) },
-    { label: "50%", onClick: () => update(colIn, formatInput(limit / 2n)) },
-    { label: "75%", onClick: () => update(colIn, formatInput((limit * 3n) / 4n)) },
-    { label: "MAX SAFE", onClick: () => update(colIn, formatInput(limit)) },
-  ] : undefined;
+  const colChips = meth > 0n
+    ? [
+        { label: "25%", onClick: () => update(formatInput((withGhost ? meth / 2n : meth) / 4n), debtIn) },
+        { label: "50%", onClick: () => update(formatInput((withGhost ? meth / 2n : meth) / 2n), debtIn) },
+        { label: "Max", onClick: () => update(formatInput(withGhost ? meth / 2n : meth), debtIn) },
+      ]
+    : undefined;
+  const debtChips = limit && limit > 0n
+    ? [
+        { label: "25%", onClick: () => update(colIn, formatInput(limit / 4n)) },
+        { label: "50%", onClick: () => update(colIn, formatInput(limit / 2n)) },
+        { label: "Max", onClick: () => update(colIn, formatInput(limit)) },
+      ]
+    : undefined;
 
   const submit = () => {
     if (invalid || !c) return;
@@ -180,123 +145,91 @@ function OpenPositionForm({
         submit();
       }}
       noValidate
-      className="space-y-4"
+      className="space-y-5"
     >
-      {/* AI Autonomous Autopilot HUD */}
-      <div className="rounded-xl border border-safe/40 bg-gradient-to-br from-safe/10 via-surface/60 to-surface/90 p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-safe/25 text-safe shadow-inner">
-              <Bot className="h-4 w-4" />
-            </span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-text">AI Autonomous Autopilot</span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-safe/20 text-safe border border-safe/30">
-                  <span className="h-1.5 w-1.5 rounded-full bg-safe animate-ping" />
-                  Auto-Configured
-                </span>
-              </div>
-            </div>
-          </div>
+      <AmountField
+        id={ids.col}
+        helpId={ids.colHelp}
+        label="Collateral"
+        unit="mETH"
+        value={colIn}
+        onChange={(v) => update(v, debtIn)}
+        error={colError}
+        help={`In wallet: ${formatToken(meth, "mETH")}`}
+        chips={colChips}
+      />
+      <AmountField
+        id={ids.debt}
+        helpId={ids.debtHelp}
+        label="Borrow"
+        unit="mUSD"
+        value={debtIn}
+        onChange={(v) => update(colIn, v)}
+        error={debtError}
+        help={limit ? `Up to ${formatToken(limit, "mUSD")} at the 1.40 limit` : "Optional"}
+        chips={debtChips}
+      />
+
+      {suggested && edited && (suggested.c !== c || suggested.d !== d) && (
+        <p className="text-sm text-muted">
+          A comfortable start for this wallet: {formatToken(suggested.c, "mETH", 4)} and {formatToken(suggested.d, "mUSD", 0)} (health 1.60).{" "}
           <button
             type="button"
-            onClick={applyAiOptimal}
-            className="text-[11px] font-mono text-safe hover:underline flex items-center gap-1 cursor-pointer"
-            title="Recalculate AI optimal parameters"
+            onClick={() => {
+              setEdited(false);
+            }}
+            className="cursor-pointer text-text underline underline-offset-2"
           >
-            <Sparkles className="h-3 w-3" />
-            Re-Analyze
+            Use it
           </button>
-        </div>
-
-        <p className="text-xs text-muted leading-relaxed">
-          AI analyzed live ETH price (<span className="text-text font-mono font-medium">${price ? formatPrice(price) : "2,500.00"}</span>) and wallet balance. Optimal safe parameters have been pre-filled.
         </p>
+      )}
 
-        <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
-          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
-            <span className="text-muted block text-[10px] uppercase">Collateral</span>
-            <span className="text-text font-bold">{colIn || "1"} mETH</span>
-          </div>
-          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
-            <span className="text-muted block text-[10px] uppercase">Auto-Borrow</span>
-            <span className="text-text font-bold">${debtIn || "1,450"} mUSD</span>
-          </div>
-          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
-            <span className="text-muted block text-[10px] uppercase">Target Health</span>
-            <span className="text-safe font-bold">1.45 (Optimal)</span>
-          </div>
-        </div>
+      {h !== undefined && d > 0n && (
+        <dl className="grid grid-cols-3 divide-x divide-border rounded-sm border border-border text-sm">
+          <Preview label="Health" value={formatHealth(h)} />
+          <Preview label="Glide starts at" value={t ? formatPrice(toWad(t.glidePrice)) : "–"} sub={t ? `ETH −${t.glideDropPct.toFixed(1)}%` : undefined} />
+          <Preview label="Normal pool liquidates at" value={t ? formatPrice(toWad(t.cliffPrice)) : "–"} sub={t ? `ETH −${t.cliffDropPct.toFixed(1)}%` : undefined} />
+        </dl>
+      )}
 
-        <div className="flex items-center gap-2 text-[11px] text-muted pt-1 border-t border-border/40">
-          <ShieldCheck className="h-4 w-4 text-safe shrink-0" />
-          <span>Just confirm on the website & MetaMask below. The AI does everything else.</span>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <AmountField
-          id={ids.col}
-          helpId={ids.colHelp}
-          label="Deposit Collateral"
-          unit="mETH"
-          value={colIn}
-          onChange={(v) => update(v, debtIn)}
-          error={colError}
-          help={`Available in wallet: ${formatToken(meth, "mETH")}`}
-          chips={colChips}
-        />
-        <AmountField
-          id={ids.debt}
-          helpId={ids.debtHelp}
-          label="Borrow Amount"
-          unit="mUSD"
-          value={debtIn}
-          onChange={(v) => update(colIn, v)}
-          error={debtError}
-          help={h !== undefined ? `Health: ${formatHealth(h)} (Safe limit: ≥ 1.40)` : "Borrowing is optional"}
-          chips={debtChips}
-        />
-      </div>
-
-      {/* Ghost Twin Switch */}
-      <div className="flex items-center justify-between rounded-lg border border-border/80 bg-surface/40 p-3">
-        <div className="space-y-0.5">
-          <label htmlFor={ids.ghost} className="flex items-center gap-1.5 text-xs font-semibold text-text cursor-pointer">
-            <span className="text-safe">✦</span> Mirror Ghost Position (Classic Cliff)
-          </label>
-          <p className="text-[11px] text-muted">
-            Duplicates position in a classic pool to compare live liquidation vs glide.
-          </p>
-        </div>
+      <label htmlFor={ids.ghost} className="flex cursor-pointer items-start gap-3 text-sm">
         <input
           id={ids.ghost}
           type="checkbox"
           checked={withGhost}
           onChange={(e) => setWithGhost(e.target.checked)}
-          className="h-4 w-4 rounded accent-[var(--safe)] cursor-pointer"
+          className="mt-0.5 h-4 w-4 cursor-pointer accent-[var(--safe)]"
         />
-      </div>
+        <span>
+          <span className="font-medium">Open a ghost in the normal pool too</span>
+          <span className="block text-muted">
+            The same loan under classic liquidation rules, so you can compare the two through the next price move.
+          </span>
+        </span>
+      </label>
 
-      <Button
-        type="submit"
-        variant="primary"
-        className="w-full justify-center py-3 font-semibold text-sm active:scale-[0.98] transition-transform flex items-center gap-2 shadow-md shadow-safe/10"
-        disabled={invalid || tx.running}
-      >
-        {tx.running ? (
-          "Executing Onchain (Confirm in MetaMask)…"
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4 text-bg" />
-            Confirm AI Parameters & Launch Position
-          </>
-        )}
-      </Button>
+      <div>
+        <Button type="submit" variant="primary" className="w-full" disabled={invalid || tx.running}>
+          {tx.running ? "Confirm in your wallet…" : "Open loan"}
+        </Button>
+        <p className="mt-2 text-center text-xs text-muted">
+          Your wallet will ask you to confirm {txCount} transactions{withGhost ? ", half of them for the ghost" : ""}.
+        </p>
+      </div>
 
       <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
     </form>
+  );
+}
+
+function Preview({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
+  return (
+    <div className="px-3 py-2">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="num font-mono">{value}</dd>
+      {sub && <dd className="num text-xs text-muted">{sub}</dd>}
+    </div>
   );
 }
 
@@ -309,30 +242,20 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
   const tx = useTxSequence();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const ids = { input: useId(), help: useId(), panel: useId() };
+  void hasGhost;
 
   const amt = parseAmount(amount);
   const c = soft.collateral;
   const d = soft.debt;
   const h = soft.health;
+  const state = healthState(h);
 
-  // AI Autopilot Guardian Status
-  const isOptimal = h >= H_COMFORT; // >= 1.45
-  const isTurbulent = h < H_COMFORT && h >= H_OPEN; // 1.40 - 1.45
-  const isDanger = h < H_OPEN; // < 1.40
-
-  const aiRebalanceSuggestion = (() => {
-    if (!price || h >= H_COMFORT || d === 0n) return null;
-    const dTarget = ((c * price) / WAD) * LT / H_COMFORT;
-    if (d > dTarget) {
-      const repayNeeded = d - dTarget;
-      return {
-        type: "repay" as Tab,
-        amountWad: repayNeeded,
-        amountStr: formatInput(repayNeeded),
-        reason: "Repay debt to restore safe 1.45 health buffer",
-      };
-    }
-    return null;
+  // What gets health back to the 1.40 opening limit at today's price (so borrowing and withdrawing work again).
+  const restore = (() => {
+    if (!price || d === 0n || h >= H_OPEN) return undefined;
+    const colNeeded = (d * H_OPEN * WAD) / (price * LT) + 1n;
+    const debtAllowed = (((c * price) / WAD) * LT) / H_OPEN;
+    return { addEth: colNeeded > c ? colNeeded - c : 0n, repayUsd: d > debtAllowed ? d - debtAllowed : 0n };
   })();
 
   const after = (() => {
@@ -345,30 +268,27 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
 
   const max = tab === "deposit" ? meth : tab === "borrow" ? (price ? maxBorrow(c, d, price) : 0n) : tab === "repay" ? (musd < d ? musd : d) : c;
   const unit = tab === "deposit" || tab === "withdraw" ? "mETH" : "mUSD";
+  const current = TABS.find((x) => x.id === tab)!;
 
   const error = (() => {
     if (!amount) return undefined;
     if (!amt || amt === 0n) return "Enter an amount above zero.";
-    if (tab === "deposit" && amt > meth) return "Exceeds wallet balance.";
-    if (tab === "repay" && amt > musd) return "Exceeds wallet balance.";
-    if (tab === "repay" && d === 0n) return "No debt to repay.";
-    if (tab === "withdraw" && amt > c) return "Exceeds collateral balance.";
+    if (tab === "deposit" && amt > meth) return "More than your wallet holds.";
+    if (tab === "repay" && amt > musd) return "More than your wallet holds.";
+    if (tab === "repay" && d === 0n) return "Nothing to repay.";
+    if (tab === "withdraw" && amt > c) return "More than your collateral.";
     if ((tab === "borrow" || tab === "withdraw") && d + (tab === "borrow" ? amt : 0n) > 0n && after !== undefined && after < H_OPEN)
-      return `Health would drop to ${formatHealth(after)} (limit ≥ 1.40).`;
+      return `Health would be ${formatHealth(after)}; the pool needs at least 1.40.`;
     return undefined;
   })();
 
-  const help = (() => {
-    const base = `Max: ${formatToken(max, unit)}`;
-    return after !== undefined ? `${base} · Health after: ${formatHealth(after)}` : base;
-  })();
-
-  const quickChips = max > 0n ? [
-    { label: "25%", onClick: () => setAmount(formatInput(max / 4n)) },
-    { label: "50%", onClick: () => setAmount(formatInput(max / 2n)) },
-    { label: "75%", onClick: () => setAmount(formatInput((max * 3n) / 4n)) },
-    { label: "MAX", onClick: () => setAmount(formatInput(max)) },
-  ] : undefined;
+  const chips = max > 0n
+    ? [
+        { label: "25%", onClick: () => setAmount(formatInput(max / 4n)) },
+        { label: "50%", onClick: () => setAmount(formatInput(max / 2n)) },
+        { label: "Max", onClick: () => setAmount(formatInput(max)) },
+      ]
+    : undefined;
 
   const submit = () => {
     if (!amt || error) return;
@@ -411,84 +331,60 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
 
   return (
     <div>
-      {/* Show alert banner ONLY if turbulence or danger is detected, avoiding duplicate 'nominal' health boxes */}
-      {(isTurbulent || isDanger) && (
-        <div
-          className={`mb-4 rounded-xl border p-3.5 space-y-2 transition-all ${
-            isDanger ? "border-cliff/40 bg-cliff/10" : "border-glide/40 bg-glide/10"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bot className={`h-4 w-4 ${isDanger ? "text-cliff" : "text-glide"}`} />
-              <span className="text-xs font-semibold text-text">
-                {isDanger ? "AI Guardian: Position Under Stress" : "AI Guardian: Market Volatility Detected"}
-              </span>
-            </div>
-            <span className={`font-mono text-xs font-bold ${isDanger ? "text-cliff" : "text-glide"}`}>
-              Health: {formatHealth(h)}
-            </span>
-          </div>
-
-          <p className="text-xs text-muted">
-            {isDanger
-              ? "Health is below 1.40 threshold. Soft liquidation glide is gently protecting your loan."
-              : "Position is in caution zone. AI recommends slight rebalancing to maintain optimal 1.45 buffer."}
+      {restore && (
+        <div className={`mb-5 rounded-sm border-l-2 px-3 py-2.5 text-sm ${state === "safe" ? "border-border bg-sunken" : "border-glide-fill bg-sunken"}`}>
+          <p className="flex flex-wrap items-center gap-2 font-medium">
+            <StatusBadge state={state} />
+            {state === "safe" ? "Below the 1.40 opening limit" : state === "gliding" ? "Your loan is gliding" : "Backstop range"}
           </p>
-
-          {aiRebalanceSuggestion && (
-            <div className="pt-1 flex items-center justify-between">
-              <span className="text-[11px] text-text font-mono">
-                Recommended: Repay ~${aiRebalanceSuggestion.amountStr} mUSD
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setTab("repay");
-                  setAmount(aiRebalanceSuggestion.amountStr);
-                }}
-                className="rounded bg-safe/20 border border-safe/40 px-2 py-0.5 text-[11px] font-semibold text-safe hover:bg-safe/30 transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <Zap className="h-3 w-3" />
-                1-Click AI Fill
+          <p className="mt-1 text-muted">
+            {state === "safe"
+              ? "Nothing is being sold, but you can't borrow more or withdraw until health is back at 1.40."
+              : state === "gliding"
+                ? "A small slice of collateral sells each block until health is back at 1.25. If the price recovers first, selling stops."
+                : "Below 1.02 the next poke sells what restores 1.25 in one step, with no bonus to anyone."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {restore.repayUsd > 0n && (
+              <button type="button" className="cursor-pointer text-text underline underline-offset-2" onClick={() => { setTab("repay"); setAmount(formatInput(restore.repayUsd)); }}>
+                Repay {formatToken(restore.repayUsd, "mUSD")} to reach 1.40
               </button>
-            </div>
-          )}
+            )}
+            {restore.addEth > 0n && (
+              <button type="button" className="cursor-pointer text-text underline underline-offset-2" onClick={() => { setTab("deposit"); setAmount(formatInput(restore.addEth)); }}>
+                or add {formatToken(restore.addEth, "mETH", 4)}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Modern Tabs */}
-      <div role="tablist" aria-label="Position actions" className="flex gap-1 overflow-x-auto border-b border-border pb-1">
-        {TABS.map((t, i) => (
+      <div role="tablist" aria-label="Position actions" className="flex gap-5 border-b border-border">
+        {TABS.map((x, i) => (
           <button
-            key={t.id}
+            key={x.id}
             ref={(el) => {
               tabRefs.current[i] = el;
             }}
             role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={tab === t.id}
+            id={`tab-${x.id}`}
+            aria-selected={tab === x.id}
             aria-controls={ids.panel}
-            tabIndex={tab === t.id ? 0 : -1}
+            tabIndex={tab === x.id ? 0 : -1}
             onKeyDown={(e) => onTabKey(e, i)}
             onClick={() => {
-              setTab(t.id);
+              setTab(x.id);
               setAmount("");
               tx.reset();
             }}
-            className={`min-h-9 cursor-pointer rounded-lg px-3 text-xs font-semibold transition-all ${
-              tab === t.id ? "bg-safe/10 text-safe border border-safe/30" : "text-muted hover:text-text hover:bg-surface/50"
+            className={`-mb-px min-h-10 cursor-pointer border-b-2 text-sm transition-colors ${
+              tab === x.id ? "border-text font-medium text-text" : "border-transparent text-muted hover:text-text"
             }`}
           >
-            {t.label}
+            {x.label}
           </button>
         ))}
       </div>
-
-      {/* Friendly Tab Hint */}
-      <p className="mt-2 text-xs text-muted">
-        {TAB_DESCRIPTIONS[tab].hint}
-      </p>
 
       <form
         id={ids.panel}
@@ -499,49 +395,54 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
           submit();
         }}
         noValidate
-        className="mt-3.5 space-y-4"
+        className="mt-4 space-y-4"
       >
+        <p className="text-sm text-muted">{current.hint}</p>
         <AmountField
           id={ids.input}
           helpId={ids.help}
-          label={`${tab.slice(0, 1).toUpperCase()}${tab.slice(1)} Amount`}
+          label="Amount"
           unit={unit}
           value={amount}
           onChange={setAmount}
           error={error}
-          help={help}
-          chips={quickChips}
+          help={`Max ${formatToken(max, unit)}`}
+          chips={chips}
         />
 
         {after !== undefined && (
-          <div className="flex items-center justify-between rounded-lg border border-border/70 bg-bg/50 px-3 py-2 text-xs">
-            <span className="text-muted">Estimated Safety Score After:</span>
-            <span className={`font-mono font-bold ${after >= H_OPEN ? "text-safe" : "text-rose-400"}`}>
-              {formatHealth(after)} {after >= H_OPEN ? "🟢 (Safe)" : "🔴 (Below 1.40 Limit)"}
+          <p className="num flex items-center justify-between border-y border-border py-2 text-sm">
+            <span className="text-muted">Health after</span>
+            <span className="inline-flex items-center gap-2 font-mono">
+              {formatHealth(h)} <span className="text-muted">→</span> {formatHealth(after)}
+              <StatusBadge state={healthState(after)} />
             </span>
-          </div>
+          </p>
         )}
 
-        <Button type="submit" variant="primary" className="w-full justify-center py-2.5 active:scale-[0.98] transition-transform font-semibold text-sm" disabled={!amt || !!error || tx.running}>
-          {tx.running ? "Settling Onchain…" : `${TAB_DESCRIPTIONS[tab].cta}${amount ? " (" + amount + " " + unit + ")" : ""}`}
+        <Button type="submit" variant="primary" className="w-full" disabled={!amt || !!error || tx.running}>
+          {tx.running ? "Confirm in your wallet…" : amt ? `${current.cta} ${formatToken(amt, unit, unit === "mETH" ? 4 : 2)}` : current.cta}
         </Button>
         <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
       </form>
 
-      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs">
-        <span className="text-muted">Need to exit completely?</span>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-3 text-sm">
+        <span className="text-muted">Done with this loan?</span>
         <button
           type="button"
           onClick={closePosition}
           disabled={tx.running}
-          className="text-xs font-semibold text-muted hover:text-rose-400 underline underline-offset-2 transition-colors disabled:opacity-50"
+          className="cursor-pointer text-text underline underline-offset-2 disabled:opacity-50"
         >
-          {tx.running ? "Closing…" : "Close & Repay Full Loan"}
+          Repay everything and withdraw
         </button>
       </div>
     </div>
   );
 }
+
+/** A price from thresholds() (a float, 2 decimals) back to WAD for formatPrice. */
+const toWad = (x: number) => BigInt(Math.round(x * 100)) * 10n ** 16n;
 
 /** WAD → plain input string (up to 6 decimals, rounded down). */
 function formatInput(x: bigint) {
@@ -559,7 +460,6 @@ function AmountField({
   onChange,
   error,
   help,
-  action,
   chips,
 }: {
   id: string;
@@ -570,22 +470,30 @@ function AmountField({
   onChange: (v: string) => void;
   error?: string;
   help?: string;
-  action?: ReactNode;
   chips?: { label: string; onClick: () => void }[];
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wider text-muted">
+      <div className="flex items-end justify-between gap-2">
+        <label htmlFor={id} className="text-sm font-medium">
           {label}
         </label>
-        {action}
+        {chips && (
+          <div className="flex gap-1">
+            {chips.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={c.onClick}
+                className="min-h-7 cursor-pointer rounded-sm px-2 text-xs text-muted transition-colors hover:bg-sunken hover:text-text"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <div
-        className={`mt-1.5 flex items-center rounded-lg border bg-surface/60 focus-within:border-safe focus-within:ring-1 focus-within:ring-safe transition-all ${
-          error ? "border-glide" : "border-border"
-        }`}
-      >
+      <div className={`mt-1.5 flex items-center rounded-sm border bg-surface transition-colors focus-within:border-text ${error ? "border-glide-fill" : "border-border"}`}>
         <input
           id={id}
           inputMode="decimal"
@@ -594,37 +502,14 @@ function AmountField({
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={!!error}
           aria-describedby={helpId}
-          className="num min-h-10 w-full min-w-0 bg-transparent px-3 text-sm outline-none font-mono"
-          placeholder="0.00"
+          className="num min-h-12 w-full min-w-0 bg-transparent px-3 font-mono text-lg outline-none"
+          placeholder="0"
         />
-        <span className="px-3 font-mono text-xs font-semibold text-muted">{unit}</span>
+        <span className="px-3 text-sm text-muted">{unit}</span>
       </div>
-
-      {chips && chips.length > 0 && (
-        <div className="mt-1.5 flex items-center justify-between">
-          <p id={helpId} className={`num text-[11px] ${error ? "text-glide font-medium" : "text-muted"}`} role={error ? "alert" : undefined}>
-            {error ?? help}
-          </p>
-          <div className="flex gap-1">
-            {chips.map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={c.onClick}
-                className="rounded border border-border/80 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-muted hover:border-safe hover:text-text active:scale-95 transition-all"
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(!chips || chips.length === 0) && (
-        <p id={helpId} className={`num mt-1 text-[11px] ${error ? "text-glide font-medium" : "text-muted"}`} role={error ? "alert" : undefined}>
-          {error ?? help}
-        </p>
-      )}
+      <p id={helpId} className={`num mt-1.5 text-xs ${error ? "text-glide" : "text-muted"}`} role={error ? "alert" : undefined}>
+        {error ?? help}
+      </p>
     </div>
   );
 }

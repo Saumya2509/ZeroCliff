@@ -26,13 +26,13 @@ export async function send<
     // fallback if RPC getTransactionCount is unavailable
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { request } = await simulateContract(config, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(params as any),
     ...(nonce !== undefined ? { nonce } : {}),
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return writeContract(config, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(request as any),
     ...(nonce !== undefined ? { nonce } : {}),
   });

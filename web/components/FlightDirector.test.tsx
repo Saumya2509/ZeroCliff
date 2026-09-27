@@ -7,7 +7,7 @@ const E = (x: number) => BigInt(Math.round(x * 1e6)) * 10n ** 12n;
 describe("FlightDirector", () => {
   it("briefs on the position with computed price levels", () => {
     render(<FlightDirector collateral={E(10)} debt={E(20_000)} price={E(3_500)} />);
-    expect(screen.getByText("Clear skies · health 1.49")).toBeTruthy();
+    expect(screen.getByText("Clear skies · health 1.48")).toBeTruthy(); // 1.4875, truncated like the contract
     // glide level = 1.25 × 20,000 / (10 × 0.85) = 2,941.18
     expect(screen.getByText("2,941.18 (−16.0%)")).toBeTruthy();
   });
