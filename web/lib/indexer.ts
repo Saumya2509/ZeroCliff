@@ -32,3 +32,6 @@ export type ActivityResponse = {
   items: ({ type: string; pool: "soft" | "cliff"; block: string; txHash: `0x${string}`; id: string } & Record<string, string>)[];
   asOfBlock: string;
 };
+
+/** GET /prices */
+export type PricesResponse = { ticks: { block: string; timestamp: string; oracle: string }[]; asOfBlock: string };

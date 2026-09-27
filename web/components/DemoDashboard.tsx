@@ -4,7 +4,8 @@ import { Pause, Play, RotateCcw } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { health, WAD } from "@/lib/sim/glide";
-import { canonicalRun } from "@/lib/sim/replay";
+import { CANONICAL, canonicalRun } from "@/lib/sim/replay";
+import { FlightDirector } from "./FlightDirector";
 import { GhostChart } from "./GhostChart";
 import { HealthAltimeter } from "./HealthAltimeter";
 import { LandingForecast } from "./LandingForecast";
@@ -57,6 +58,9 @@ export function DemoDashboard() {
     ...run.points.slice(0, i + 1).map((p) => ({ block: START_BLOCK + p.block, soft: p.raw.softC, ghost: p.raw.cliffC })),
   ];
   const minute = Math.round((pt.block * 2) / 60);
+  // the Flight Director measures volatility from the demo price path up to the current moment
+  const prices = run.points.slice(0, i + 1).map((p) => p.price);
+  const priceHistory = prices.length >= 12 ? { prices, intervalS: CANONICAL.blocksPerStep * 2, source: "demo price path so far" } : undefined;
 
   return (
     <div className="space-y-4">
@@ -112,6 +116,10 @@ export function DemoDashboard() {
 
       <Card title="Landing forecast" description="What would happen from this moment if the price dropped further.">
         <LandingForecast collateral={softC} debt={softD} price={price} hasPosition={false} />
+      </Card>
+
+      <Card title="Flight Director" description="Ask about this demo loan in plain words. Runs in your browser: no network calls, no language model.">
+        <FlightDirector collateral={softC} debt={softD} price={price} history={priceHistory} />
       </Card>
     </div>
   );

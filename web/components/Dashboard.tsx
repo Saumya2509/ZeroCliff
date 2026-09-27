@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useAccount, useBlockNumber } from "wagmi";
 import { useHistory } from "@/hooks/useHistory";
 import { usePosition, usePrice } from "@/hooks/usePosition";
+import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { isDeployed } from "@/lib/contracts";
 import { MAX_UINT, health } from "@/lib/sim/glide";
 import { ActionPanel } from "./ActionPanel";
 import { ActivityFeed } from "./ActivityFeed";
 import { DemoDashboard } from "./DemoDashboard";
 import { FaucetButton } from "./FaucetButton";
+import { FlightDirector } from "./FlightDirector";
 import { GhostChart } from "./GhostChart";
 import { HealthAltimeter } from "./HealthAltimeter";
 import { LandingForecast } from "./LandingForecast";
@@ -24,6 +26,7 @@ export function Dashboard() {
   const pos = usePosition(address);
   const { price } = usePrice();
   const history = useHistory(address);
+  const priceHistory = usePriceHistory();
   const { data: block } = useBlockNumber({ watch: isConnected && isDeployed, query: { enabled: isConnected && isDeployed } });
   const [draft, setDraft] = useState({ collateral: 4n * 10n ** 18n, debt: 8_000n * 10n ** 18n });
 
@@ -111,6 +114,15 @@ export function Dashboard() {
           debt={forecastInput.debt}
           price={price}
           hasPosition={pos.hasPosition}
+        />
+      </Card>
+
+      <Card title="Flight Director" description="Ask about this loan in plain words. Runs in your browser: no network calls, no language model.">
+        <FlightDirector
+          collateral={pos.hasPosition && soft ? soft.collateral : 0n}
+          debt={pos.hasPosition && soft ? soft.debt : 0n}
+          price={price}
+          history={priceHistory.data}
         />
       </Card>
 

@@ -61,3 +61,20 @@ test("cascade lab runs a shared scenario in a worker and downloads the result", 
   for (const id of ["E1", "E2", "E3", "E4", "E5", "E6", "E7"]) await expect(page.locator(`[data-experiment="${id}"]`)).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("flight director answers questions about the demo loan, offline", async ({ page }) => {
+  const external: string[] = [];
+  page.on("request", (r) => {
+    const u = new URL(r.url());
+    if (!["localhost", "127.0.0.1"].includes(u.hostname) && u.protocol.startsWith("http")) external.push(r.url());
+  });
+  await page.goto("/app", { waitUntil: "networkidle" });
+  await expect(page.getByRole("button", { name: /Play the crash/ })).toBeEnabled();
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Flight Director" }) });
+  await card.getByLabel("Ask about this loan").fill("what if eth crashes 30%");
+  await card.getByRole("button", { name: "Ask" }).click();
+  await expect(card.getByText("Stress test · ETH −30%")).toBeVisible();
+  await card.getByRole("button", { name: "Am I safe to sleep?" }).click();
+  await expect(card.getByText(/The next 8 hours/)).toBeVisible({ timeout: 15_000 });
+  expect(external, "no network calls").toEqual([]);
+});
