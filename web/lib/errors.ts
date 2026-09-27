@@ -47,6 +47,10 @@ export function toPlainMessage(e: unknown): string {
     }
     return `The contract rejected this (${d.name}).`;
   }
+  const rawMsg = e instanceof Error ? e.message : String(e);
+  if (/nonce too low/i.test(rawMsg) || /nonce has already been used/i.test(rawMsg)) {
+    return "Wallet nonce was out of sync. Click 'Try again' to submit with the updated nonce.";
+  }
   if (e instanceof BaseError) return e.shortMessage;
   return "Something went wrong. Please try again.";
 }

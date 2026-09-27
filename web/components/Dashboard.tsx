@@ -33,7 +33,7 @@ export function Dashboard() {
   const history = useHistory(address);
   const priceHistory = usePriceHistory();
   const { data: block } = useBlockNumber({ watch: isConnected && isDeployed, query: { enabled: isConnected && isDeployed } });
-  const [draft, setDraft] = useState({ collateral: 4n * 10n ** 18n, debt: 8_000n * 10n ** 18n });
+  const [draft, setDraft] = useState({ collateral: 1n * 10n ** 18n, debt: 1_450n * 10n ** 18n });
   const [activeTab, setActiveTab] = useState<TelemetryTab>("ghost");
 
   if (!isDeployed)
@@ -93,7 +93,7 @@ export function Dashboard() {
           <span className="text-muted">·</span>
           <div className="flex items-center gap-1.5 rounded-full border border-safe/30 bg-safe/10 px-2 py-0.5 font-mono text-[10px] font-bold text-safe">
             <Bot className="h-3 w-3" />
-            <span>100% LOCAL AI ACTIVE (10.md)</span>
+            <span>100% LOCAL QUANT AI ACTIVE</span>
           </div>
         </div>
 
@@ -114,12 +114,12 @@ export function Dashboard() {
         {/* Left Column: Actions & Position Command (5 cols) */}
         <div className="space-y-4 lg:col-span-5">
           {pos.hasPosition && (
-            <Card title="Live Position Metrics">
+            <Card title="Loan Summary & Safety" description="Real-time status of your collateral, borrowed debt, and protection mode">
               <PositionCard soft={soft} ghost={pos.ghost} price={price} loading={pos.isLoading} />
             </Card>
           )}
 
-          <Card title={pos.hasPosition ? "Manage Loan" : "Open Paired Position"}>
+          <Card title={pos.hasPosition ? "Manage Your Loan" : "Open Position (AI Autopilot)"} description={pos.hasPosition ? "Deposit, borrow, repay, or withdraw with instant safety impact" : "Set up your loan with automated safe parameters"}>
             <ActionPanel
               user={address}
               soft={soft}
@@ -133,8 +133,8 @@ export function Dashboard() {
 
         {/* Right Column: Avionics Telemetry & Deep-Dive HUD (7 cols) */}
         <div className="space-y-4 lg:col-span-7">
-          {/* Signature Health Altimeter */}
-          <Card title="Health Altimeter" description={pos.hasPosition ? "Live onchain altitude · updates every block" : "Real-time altitude forecast based on your input"}>
+          {/* Signature Health Altimeter / Safety Runway */}
+          <Card title="Loan Safety Runway" description={pos.hasPosition ? "Live onchain crash cushion · Gentle micro-sales replace 100% cliff liquidations" : "Real-time safety runway based on your configured parameters"}>
             <HealthAltimeter health={shownHealth} />
           </Card>
 

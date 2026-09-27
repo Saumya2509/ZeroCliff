@@ -1,4 +1,4 @@
-// Flight Director (md/manali/10): a local risk assistant for one position. Three layers, all in the
+// Flight Director: a local risk assistant for one position. Three layers, all in the
 // browser, no network calls and no language model:
 //   1. parseIntent: rule-based question parser (keywords with typo tolerance, numbers by regex)
 //   2. quant: price thresholds, EWMA volatility, barrier probability, seeded Monte Carlo that runs the
@@ -336,9 +336,9 @@ export function briefing(ctx: Context): Advice {
     headline,
     lines,
     figures: [
-      { label: "Glide starts at", value: level(t.glidePrice, t.glideDropPct) },
-      { label: "Backstop at", value: level(t.floorPrice, t.floorDropPct) },
-      { label: "Cliff pool liquidates at", value: level(t.cliffPrice, t.cliffDropPct) },
+      { label: "Protection starts at", value: level(t.glidePrice, t.glideDropPct) },
+      { label: "Floor backstop cushion", value: level(t.floorPrice, t.floorDropPct) },
+      { label: "Competitor pool wipes at", value: level(t.cliffPrice, t.cliffDropPct) },
     ],
   };
 }

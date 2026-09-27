@@ -2,7 +2,7 @@
 
 /*
  * Tokens: primitive → semantic → Tailwind theme.
- * Primitives are the Manali palette from 04-frontend-web-app.md. Components only use semantic tokens.
+ * Primitives are the ZeroCliff palette. Components only use semantic tokens.
  * Text colours were checked against WCAG AA (≥ 4.5:1). Amber and mist fail as text on snowfield, so
  * text uses the darker "ink" variants; amber and mist stay for fills and gridlines.
  * Red is reserved for the cliff pool, so the comparison reads instantly.

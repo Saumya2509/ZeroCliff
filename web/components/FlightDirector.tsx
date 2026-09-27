@@ -22,7 +22,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-// Flight Director (md/manali/10): 100% local, zero-API quantitative AI risk engine.
+// Flight Director: 100% local, zero-API quantitative AI risk engine.
 // Executes locally in the browser with zero external calls, sub-5ms latency, and 100% determinism.
 
 const ASSUMED_SIGMA = 0.7; // Fallback volatility when price history is flat/limited
@@ -50,7 +50,7 @@ const STATUS_CONFIG: Record<
 > = {
   CLEAR_SKIES: {
     badge: "safe",
-    label: "CLEAR SKIES",
+    label: "ALL CLEAR · HIGH SAFETY",
     icon: ShieldCheck,
     glowClass: "shadow-[0_0_25px_-5px_rgba(34,197,94,0.15)]",
     borderClass: "border-emerald-500/30",
@@ -60,7 +60,7 @@ const STATUS_CONFIG: Record<
   },
   MILD_TURBULENCE: {
     badge: "gliding",
-    label: "MILD TURBULENCE",
+    label: "SOFT PROTECTION ACTIVE",
     icon: AlertTriangle,
     glowClass: "shadow-[0_0_25px_-5px_rgba(245,158,11,0.15)]",
     borderClass: "border-amber-500/30",
@@ -70,7 +70,7 @@ const STATUS_CONFIG: Record<
   },
   CRITICAL_DESCENT: {
     badge: "backstop",
-    label: "CRITICAL DESCENT",
+    label: "EMERGENCY BACKSTOP",
     icon: AlertOctagon,
     glowClass: "shadow-[0_0_25px_-5px_rgba(239,68,68,0.15)]",
     borderClass: "border-rose-500/30",
@@ -80,7 +80,7 @@ const STATUS_CONFIG: Record<
   },
   NO_POSITION: {
     badge: "none",
-    label: "READY · NO LOAN",
+    label: "READY TO LAUNCH",
     icon: Bot,
     glowClass: "shadow-none",
     borderClass: "border-border/80",
@@ -117,7 +117,7 @@ export function FlightDirector({
     return (
       <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/50 p-6 text-sm text-muted">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span>Initializing local AI flight director with live Pyth oracle feed…</span>
+        <span>Initializing local AI risk assistant with live Pyth oracle feed…</span>
       </div>
     );
   }
@@ -139,9 +139,15 @@ export function FlightDirector({
     }, 15);
   };
 
+  const cleanHeadline = brief.headline
+    .replace(/^Clear skies · /i, "")
+    .replace(/^Critical descent · /i, "")
+    .replace(/^Mild turbulence · /i, "")
+    .replace(/^No open loan · /i, "");
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-b from-surface via-surface/95 to-bg/80 p-5 shadow-2xl backdrop-blur-xl">
-      {/* High-Tech Avionics Header */}
+      {/* High-Tech Risk Assistant Header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
         <div className="flex items-center gap-3">
           <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-safe/40 bg-safe/10 text-safe shadow-[0_0_15px_-3px_rgba(34,197,94,0.3)]">
@@ -153,12 +159,12 @@ export function FlightDirector({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold tracking-tight text-text">AI Flight Director</h3>
+              <h3 className="font-semibold tracking-tight text-text">AI Risk Assistant</h3>
               <span className="rounded-md border border-safe/40 bg-safe/15 px-2 py-0.5 font-mono text-[10px] font-bold text-safe">
-                10.md LOCAL AI
+                100% LOCAL QUANT AI
               </span>
             </div>
-            <p className="text-xs text-muted">Zero-API · Sub-5ms deterministic quantitative intelligence</p>
+            <p className="text-xs text-muted">Sub-5ms deterministic loan safety & crash simulation</p>
           </div>
         </div>
 
@@ -167,7 +173,7 @@ export function FlightDirector({
           <button
             type="button"
             onClick={() => setShowQuantTuner((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-bg/80 px-2.5 py-1 text-xs text-muted transition-colors hover:border-text hover:text-text"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-bg/80 px-2.5 py-1 text-xs text-muted transition-colors hover:border-text hover:text-text cursor-pointer"
             title="Adjust Volatility Model & View Math"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -192,7 +198,7 @@ export function FlightDirector({
                   {statusCfg.label}
                 </span>
                 <span className="text-muted/60">·</span>
-                <h4 className="text-sm font-semibold text-text">{brief.headline}</h4>
+                <h4 className="text-sm font-semibold text-text capitalize">{cleanHeadline}</h4>
               </div>
               <div className="space-y-0.5 text-xs text-muted">
                 {brief.lines.map((line, idx) => (

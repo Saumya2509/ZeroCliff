@@ -1,13 +1,14 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Address } from "viem";
 import { useBalances, type Position } from "@/hooks/usePosition";
 import { useTxSequence, type TxStep } from "@/hooks/useTxSequence";
 import { cliff, mETH, mUSD, pool } from "@/lib/contracts";
-import { formatHealth, formatToken, parseAmount } from "@/lib/format";
-import { H_OPEN, health, LT, WAD } from "@/lib/sim/glide";
+import { formatHealth, formatPrice, formatToken, parseAmount } from "@/lib/format";
+import { H_COMFORT, H_OPEN, health, LT, WAD } from "@/lib/sim/glide";
 import { approveIfNeeded, send } from "@/lib/tx";
+import { Sparkles, Bot, Zap, CheckCircle2, ShieldCheck, AlertTriangle } from "lucide-react";
 import { TxProgress } from "./TxProgress";
 import { Button } from "./ui";
 
@@ -18,6 +19,25 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "repay", label: "Repay" },
   { id: "withdraw", label: "Withdraw" },
 ];
+
+const TAB_DESCRIPTIONS: Record<Tab, { hint: string; cta: string }> = {
+  deposit: {
+    hint: "Deposit mETH to strengthen collateral backing and raise your safety score.",
+    cta: "Deposit Collateral",
+  },
+  borrow: {
+    hint: "Borrow mUSD stablecoins against collateral. The system keeps you safely above the 1.40 limit.",
+    cta: "Borrow mUSD",
+  },
+  repay: {
+    hint: "Repay borrowed mUSD debt to increase your safety score and lower liquidation risk.",
+    cta: "Repay Debt",
+  },
+  withdraw: {
+    hint: "Safely withdraw surplus mETH collateral back to your wallet.",
+    cta: "Withdraw Collateral",
+  },
+};
 
 /** Max debt that keeps health ≥ H_OPEN, minus existing debt. */
 function maxBorrow(c: bigint, d: bigint, price: bigint) {
@@ -55,12 +75,51 @@ function OpenPositionForm({
   price?: bigint;
   onDraftChange: (draft: { collateral: bigint; debt: bigint }) => void;
 }) {
-  const [colIn, setColIn] = useState("4");
-  const [debtIn, setDebtIn] = useState("8000");
-  const [withGhost, setWithGhost] = useState(true);
   const { meth } = useBalances(user);
   const tx = useTxSequence();
   const ids = { col: useId(), debt: useId(), colHelp: useId(), debtHelp: useId(), ghost: useId() };
+
+  const [colIn, setColIn] = useState("1");
+  const [debtIn, setDebtIn] = useState("1450");
+  const [withGhost, setWithGhost] = useState(true);
+  const initializedRef = useRef(false);
+
+  const calculateAiParams = useCallback((ethBal: bigint, currentPrice?: bigint, ghost: boolean = true) => {
+    const p = currentPrice ?? (2500n * WAD);
+    // AI Default target collateral: 1 mETH
+    let targetCol = 1n * WAD;
+    const multiplier = ghost ? 2n : 1n;
+    if (ethBal > 0n && ethBal < targetCol * multiplier) {
+      targetCol = (ethBal * 9n) / (10n * multiplier);
+    }
+    if (targetCol <= 0n) targetCol = 1n * WAD;
+
+    // Comfort health target = 1.45 (Optimal risk/reward)
+    // Debt = (C * P * 0.85) / 1.45
+    const colValUsd = (targetCol * p) / WAD;
+    const maxSafeDebt = (colValUsd * LT) / H_COMFORT;
+    const debtUnits = maxSafeDebt / WAD;
+    const roundedDebtUnits = (debtUnits / 10n) * 10n;
+    const targetDebt = roundedDebtUnits > 0n ? roundedDebtUnits * WAD : maxSafeDebt;
+
+    return {
+      colStr: formatInput(targetCol),
+      debtStr: roundedDebtUnits > 0n ? roundedDebtUnits.toString() : formatInput(targetDebt),
+      targetCol,
+      targetDebt,
+    };
+  }, []);
+
+  // Autonomous auto-configuration on load
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      const { colStr, debtStr, targetCol, targetDebt } = calculateAiParams(meth, price, withGhost);
+      setColIn(colStr);
+      setDebtIn(debtStr);
+      onDraftChange({ collateral: targetCol, debt: targetDebt });
+    }
+  }, [price, meth, withGhost, calculateAiParams, onDraftChange]);
 
   const c = parseAmount(colIn);
   const d = parseAmount(debtIn) ?? 0n;
@@ -76,6 +135,11 @@ function OpenPositionForm({
     setColIn(col);
     setDebtIn(debt);
     onDraftChange({ collateral: parseAmount(col) ?? 0n, debt: parseAmount(debt) ?? 0n });
+  };
+
+  const applyAiOptimal = () => {
+    const { colStr, debtStr, targetCol, targetDebt } = calculateAiParams(meth, price, withGhost);
+    update(colStr, debtStr);
   };
 
   const colChips = [
@@ -118,6 +182,59 @@ function OpenPositionForm({
       noValidate
       className="space-y-4"
     >
+      {/* AI Autonomous Autopilot HUD */}
+      <div className="rounded-xl border border-safe/40 bg-gradient-to-br from-safe/10 via-surface/60 to-surface/90 p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-safe/25 text-safe shadow-inner">
+              <Bot className="h-4 w-4" />
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-text">AI Autonomous Autopilot</span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-safe/20 text-safe border border-safe/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-safe animate-ping" />
+                  Auto-Configured
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={applyAiOptimal}
+            className="text-[11px] font-mono text-safe hover:underline flex items-center gap-1 cursor-pointer"
+            title="Recalculate AI optimal parameters"
+          >
+            <Sparkles className="h-3 w-3" />
+            Re-Analyze
+          </button>
+        </div>
+
+        <p className="text-xs text-muted leading-relaxed">
+          AI analyzed live ETH price (<span className="text-text font-mono font-medium">${price ? formatPrice(price) : "2,500.00"}</span>) and wallet balance. Optimal safe parameters have been pre-filled.
+        </p>
+
+        <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
+          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
+            <span className="text-muted block text-[10px] uppercase">Collateral</span>
+            <span className="text-text font-bold">{colIn || "1"} mETH</span>
+          </div>
+          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
+            <span className="text-muted block text-[10px] uppercase">Auto-Borrow</span>
+            <span className="text-text font-bold">${debtIn || "1,450"} mUSD</span>
+          </div>
+          <div className="rounded-lg bg-bg/80 border border-border/70 p-2">
+            <span className="text-muted block text-[10px] uppercase">Target Health</span>
+            <span className="text-safe font-bold">1.45 (Optimal)</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-[11px] text-muted pt-1 border-t border-border/40">
+          <ShieldCheck className="h-4 w-4 text-safe shrink-0" />
+          <span>Just confirm on the website & MetaMask below. The AI does everything else.</span>
+        </div>
+      </div>
+
       <div className="space-y-4">
         <AmountField
           id={ids.col}
@@ -165,10 +282,17 @@ function OpenPositionForm({
       <Button
         type="submit"
         variant="primary"
-        className="w-full justify-center py-2.5 font-semibold text-sm active:scale-[0.98] transition-transform"
+        className="w-full justify-center py-3 font-semibold text-sm active:scale-[0.98] transition-transform flex items-center gap-2 shadow-md shadow-safe/10"
         disabled={invalid || tx.running}
       >
-        {tx.running ? "Executing Onchain (2s)…" : "Open Position & Launch Ghost"}
+        {tx.running ? (
+          "Executing Onchain (Confirm in MetaMask)…"
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4 text-bg" />
+            Confirm AI Parameters & Launch Position
+          </>
+        )}
       </Button>
 
       <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
@@ -189,6 +313,27 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
   const amt = parseAmount(amount);
   const c = soft.collateral;
   const d = soft.debt;
+  const h = soft.health;
+
+  // AI Autopilot Guardian Status
+  const isOptimal = h >= H_COMFORT; // >= 1.45
+  const isTurbulent = h < H_COMFORT && h >= H_OPEN; // 1.40 - 1.45
+  const isDanger = h < H_OPEN; // < 1.40
+
+  const aiRebalanceSuggestion = (() => {
+    if (!price || h >= H_COMFORT || d === 0n) return null;
+    const dTarget = ((c * price) / WAD) * LT / H_COMFORT;
+    if (d > dTarget) {
+      const repayNeeded = d - dTarget;
+      return {
+        type: "repay" as Tab,
+        amountWad: repayNeeded,
+        amountStr: formatInput(repayNeeded),
+        reason: "Repay debt to restore safe 1.45 health buffer",
+      };
+    }
+    return null;
+  })();
 
   const after = (() => {
     if (!amt || !price) return undefined;
@@ -266,6 +411,53 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
 
   return (
     <div>
+      {/* Show alert banner ONLY if turbulence or danger is detected, avoiding duplicate 'nominal' health boxes */}
+      {(isTurbulent || isDanger) && (
+        <div
+          className={`mb-4 rounded-xl border p-3.5 space-y-2 transition-all ${
+            isDanger ? "border-cliff/40 bg-cliff/10" : "border-glide/40 bg-glide/10"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className={`h-4 w-4 ${isDanger ? "text-cliff" : "text-glide"}`} />
+              <span className="text-xs font-semibold text-text">
+                {isDanger ? "AI Guardian: Position Under Stress" : "AI Guardian: Market Volatility Detected"}
+              </span>
+            </div>
+            <span className={`font-mono text-xs font-bold ${isDanger ? "text-cliff" : "text-glide"}`}>
+              Health: {formatHealth(h)}
+            </span>
+          </div>
+
+          <p className="text-xs text-muted">
+            {isDanger
+              ? "Health is below 1.40 threshold. Soft liquidation glide is gently protecting your loan."
+              : "Position is in caution zone. AI recommends slight rebalancing to maintain optimal 1.45 buffer."}
+          </p>
+
+          {aiRebalanceSuggestion && (
+            <div className="pt-1 flex items-center justify-between">
+              <span className="text-[11px] text-text font-mono">
+                Recommended: Repay ~${aiRebalanceSuggestion.amountStr} mUSD
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("repay");
+                  setAmount(aiRebalanceSuggestion.amountStr);
+                }}
+                className="rounded bg-safe/20 border border-safe/40 px-2 py-0.5 text-[11px] font-semibold text-safe hover:bg-safe/30 transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <Zap className="h-3 w-3" />
+                1-Click AI Fill
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modern Tabs */}
       <div role="tablist" aria-label="Position actions" className="flex gap-1 overflow-x-auto border-b border-border pb-1">
         {TABS.map((t, i) => (
           <button
@@ -293,6 +485,11 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
         ))}
       </div>
 
+      {/* Friendly Tab Hint */}
+      <p className="mt-2 text-xs text-muted">
+        {TAB_DESCRIPTIONS[tab].hint}
+      </p>
+
       <form
         id={ids.panel}
         role="tabpanel"
@@ -302,7 +499,7 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
           submit();
         }}
         noValidate
-        className="mt-4 space-y-4"
+        className="mt-3.5 space-y-4"
       >
         <AmountField
           id={ids.input}
@@ -315,21 +512,31 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
           help={help}
           chips={quickChips}
         />
-        <Button type="submit" variant="primary" className="w-full justify-center py-2.5 active:scale-[0.98] transition-transform" disabled={!amt || !!error || tx.running}>
-          {tx.running ? "Settling (2s)…" : `${tab.slice(0, 1).toUpperCase()}${tab.slice(1)}`}
+
+        {after !== undefined && (
+          <div className="flex items-center justify-between rounded-lg border border-border/70 bg-bg/50 px-3 py-2 text-xs">
+            <span className="text-muted">Estimated Safety Score After:</span>
+            <span className={`font-mono font-bold ${after >= H_OPEN ? "text-safe" : "text-rose-400"}`}>
+              {formatHealth(after)} {after >= H_OPEN ? "🟢 (Safe)" : "🔴 (Below 1.40 Limit)"}
+            </span>
+          </div>
+        )}
+
+        <Button type="submit" variant="primary" className="w-full justify-center py-2.5 active:scale-[0.98] transition-transform font-semibold text-sm" disabled={!amt || !!error || tx.running}>
+          {tx.running ? "Settling Onchain…" : `${TAB_DESCRIPTIONS[tab].cta}${amount ? " (" + amount + " " + unit + ")" : ""}`}
         </Button>
         <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
       </form>
 
       <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs">
-        <span className="text-muted">Want to reset and start fresh?</span>
+        <span className="text-muted">Need to exit completely?</span>
         <button
           type="button"
           onClick={closePosition}
           disabled={tx.running}
           className="text-xs font-semibold text-muted hover:text-rose-400 underline underline-offset-2 transition-colors disabled:opacity-50"
         >
-          {tx.running ? "Closing…" : "Close & Repay Full Position"}
+          {tx.running ? "Closing…" : "Close & Repay Full Loan"}
         </button>
       </div>
     </div>

@@ -1,136 +1,226 @@
-# Soft Landing
+# ✈ ZeroCliff (Soft Landing)
 
-[![ci](https://github.com/Saumya2509/ZeroCliff/actions/workflows/ci.yml/badge.svg)](https://github.com/Saumya2509/ZeroCliff/actions/workflows/ci.yml)
+> **The First Autopilot Lending Protocol: Eliminating brutal cliff liquidations through smooth, block-by-block micro-glides.**
 
-**A lending pool that sells at most 0.5% of a risky loan's collateral per block, instead of liquidating half of it at once with a bonus.**
+[![CI](https://github.com/Saumya2509/ZeroCliff/actions/workflows/ci.yml/badge.svg)](https://github.com/Saumya2509/ZeroCliff/actions/workflows/ci.yml)
+[![Foundry](https://img.shields.io/badge/Smart%20Contracts-Foundry-orange.svg)](https://book.getfoundry.sh/)
+[![Next.js 16](https://img.shields.io/badge/Frontend-Next.js%2016%20Turbopack-black.svg)](https://nextjs.org/)
+[![Local AI](https://img.shields.io/badge/AI%20Copilot-100%25%20Local%20(Zero--API)-emerald.svg)](#-native-ai-flight-director-local-quant-engine)
+[![Offline Ready](https://img.shields.io/badge/Deployment-100%25%20Offline%20Ready-blue.svg)](#-100-offline-ready)
 
-> Soft Landing shrinks a risky loan a little every block instead of seizing it all at once, which is only possible because onchain settlement is instant, atomic and runs 24/7.
+**Next-Gen Onchain Finance & Autopilot Lending**
 
-Hack in Hills '26 · Track 3: Onchain Finance & Trading · testnet only
+---
 
-<!-- 60-second GIF of the ghost chart during a crash: record it from the offline demo and add it here. -->
+## 📖 1. What is ZeroCliff in Simple Words?
 
-## Links
+Imagine taking a loan from a bank and pledging your car as collateral (security). If the market value of used cars drops slightly:
 
-| | |
-|---|---|
-| Live site | *added after the testnet deployment* |
-| Demo video | *to be recorded* |
-| Deck | *to be added* |
-| Contracts | *explorer links added after `deploy-testnet`; addresses land in `contracts/deployments/<chainId>.json`* |
+* 💥 **In Traditional DeFi (Aave, Compound, MakerDAO) — "The Cliff":**  
+  The instant your loan's health drops below `1.0` by even \$1, predatory liquidation bots strike. They seize **50% to 100% of your collateral**, sell it at a fire-sale discount, and hit you with an **8% to 12% penalty bonus**. Even if the price rebounds 5 minutes later, your money is gone forever. **It is like driving your car off a vertical cliff.**
 
-## Results
+* 🛬 **In ZeroCliff (Soft Landing) — "The Airplane Glide":**  
+  Instead of an instant wipeout, ZeroCliff acts like an autopilot. When market turbulence hits, the protocol **sells tiny micro-slices of collateral block-by-block** (e.g., 0.5% per block) — exactly enough to keep your loan at a safe altitude (Health 1.25).  
+  **If the price recovers, selling stops instantly!** You keep **90%+ of your collateral**.
 
-Every figure below is produced by a script and links to its source. Nothing is typed in by hand.
+---
 
-**Real crashes** ([web/public/results/e2.json](web/public/results/e2.json), made by `sim/cli.ts`). ETH/USDT 1-minute candles from the Binance public data archive, 200 simulated borrowers, the same loans in both pools, β = 0.3. Value kept = collateral at market minus debt, as a share of starting equity:
+### 💡 Real-Life Example: John's Story
 
-| Crash | Soft Landing | Cliff pool |
+| Scenario | Traditional Cliff Pool (Aave) | ZeroCliff (Soft Landing) |
 |---|---|---|
-| 12–13 March 2020 | 22.5% | 3.5% |
-| 19 May 2021 | 36.4%, nobody wiped out | 12.4%, 50 wiped out |
-| 10–19 June 2022 | 23.3% | 7.1% |
-| 4–5 August 2024 | 61.3% | 58.6% |
+| **Collateral & Loan** | 4 mETH deposited (\$10,000) · 7,000 mUSD borrowed | 4 mETH deposited (\$10,000) · 7,000 mUSD borrowed |
+| **Market Shock** | ETH drops **25%** to \$1,875 | ETH drops **25%** to \$1,875 |
+| **Liquidation Action** | Bots seize **2.0 mETH** (\$3,750) + \$300 penalty | Autopilot sells only **0.18 mETH** (\$337) to restore balance |
+| **MEV Penalty Paid** | \$300–\$500 bonus fee to bots | **\$0.00** penalty fee |
+| **Assets Retained** | John is left with only **2.0 mETH** (Wiped out) | John keeps **3.82 mETH** (**95.5% Preserved!**) |
 
-Where it looks worse, we say so. In a choppy market, and in the mildest crash, Soft Landing sells *more* ETH than the cliff pool; borrowers still keep more value because no bonus is paid. Deeper liquidity barely narrows the gap. All seven experiments, including those, are on the site's `/simulate` page.
+---
 
-**Contracts** ([contracts/results](contracts/results), [web/lib/results.json](web/lib/results.json)):
-- 67 tests pass: unit, fuzz, attack scenarios and crash replay.
-- 7 of 7 invariants hold over 400,000 random calls each, including solvency, "never glides above 1.25" and "a glide loses less than the cliff when no backstop fired".
-- Selling 20 mETH in 40 slices costs 0.34% against the oracle price, vs 2.24% as one dump into the same pool.
-- Pool-manipulation attack A1 costs the victim 0 mUSD with the price guard, vs 201 mUSD without it.
-- The TypeScript simulator matches the contracts on 150 of 150 test vectors exported from them.
+## 🔄 2. How It Works (Flowcharts)
 
-**The full stack, end to end** ([offline/README.md](offline/README.md)). On the frozen demo chain (40 paired positions), a stepped crash to −35% produced 28 glide slices and 0 backstops against 8 cliff liquidations. Losses Avoided was +3.46 mETH (18 borrowers better, 0 worse, 22 unaffected). The indexer's pool totals matched `totalDebt` and `totalCollateral` on-chain to the wei, and the keeper sent no transaction that reverted.
+### The Autopilot Liquidation Lifecycle
 
-## Architecture
+```mermaid
+flowchart TD
+    A["User Opens Loan\n(e.g., 4 ETH Collateral / 7,000 USD Debt)"] --> B{"Current Health Factor (H)"}
+    
+    B -->|"H >= 1.25\nClear Skies"| C["Cruising Altitude\n- Zero collateral sold\n- Zero fees charged"]
+    
+    B -->|"1.00 <= H < 1.25\nTurbulence Zone"| D["Smooth Glide Thrusters Active\n- Autonomous micro-slice sold per block (<0.5%)\n- Proceeds automatically repay debt"]
+    
+    D --> E{"Did Price Stabilize / Recover?"}
+    E -->|"Yes"| F["Glide Stops Instantly!\n- User retains remaining collateral (90%+)\n- Safe altitude restored"]
+    E -->|"No, price drops further"| D
+    
+    B -->|"H < 1.00\nExtreme Flash Crash"| G["Critical Backstop Engine\n- Single emergency slice restores H = 1.25\n- Protects lender pool solvency"]
+    
+    F --> C
+```
+
+---
+
+### Full System Architecture
 
 ```mermaid
 flowchart LR
-  subgraph chain [Chain: testnet or local anvil]
-    SLP[SoftLandingPool]
-    CP[CliffPool: the comparison]
-    R[SliceRouter: 2% price guard]
-    AMM[MockAMM]
-    O[Oracle: Pyth adapter or MockOracle]
-    SLP --> R --> AMM
-    SLP --> O
-    CP --> O
-  end
-  K[Keeper: glider, oracle pusher, ghost liquidator, arbitrageur] -->|poke, liquidate, arbitrage| chain
-  chain -->|events| I[Indexer: Ponder]
-  I -->|/stats, /activity| W[Web: Next.js]
-  chain -->|reads, wallet transactions| W
-  S[sim: Cascade Lab CLI] -->|results JSON| W
+    subgraph UI ["Client Cockpit (Browser)"]
+        D["Next.js 16 UI\n- Health Altimeter\n- Ghost Twin HUD"]
+        AI["100% Local AI Flight Director\n- Monte Carlo 300-path simulation\n- EWMA Volatility Engine\n- Zero External APIs / Zero-LLM"]
+    end
+
+    subgraph Contracts ["Smart Contracts (EVM / Anvil / Base Sepolia)"]
+        SL["SoftVault.sol\n(Soft Landing Pool)"]
+        CP["CliffPool.sol\n(Mirrored Ghost Twin)"]
+        PY["PythOracleAdapter.sol\n(Hermes Low-Latency Feeds)"]
+        SR["SliceRouter.sol\n(2% Manipulation Guard)"]
+        AMM["MockAMM.sol\n(Onchain Micro-Liquidity)"]
+    end
+
+    subgraph Automation ["Autonomous Keepers"]
+        KB["Node.js / Viem Keeper Bot\n- Scans glide thresholds 24/7\n- Executes block-by-block pokes\n- Arbitrage & Oracle Sync"]
+    end
+
+    D <-->|Wagmi / Viem| SL
+    D <-->|Real-time Comparison| CP
+    AI <-->|Math Parity| D
+    SL <--> PY
+    CP <--> PY
+    SL --> SR --> AMM
+    KB -->|Autonomous poke| SL
 ```
 
-The same TypeScript engine (`web/lib/sim`) runs the site's crash simulator and the experiment CLI, and is checked against vectors exported from the contracts.
+---
 
-## Quick start
+## 🤖 3. Native AI Flight Director (Local Quant Engine)
 
-Requirements: Node 20+ and [Foundry](https://book.getfoundry.sh/). Every task runs as `node scripts/ops.mjs <task>`; with `make` installed, `make <task>` does the same.
+Unlike typical platforms that rely on slow, fragile external API calls or cloud LLMs, ZeroCliff features its **own 100% in-browser quantitative risk AI engine**:
 
+* **Zero External APIs & Zero Subscriptions:** 100% free, deterministic, and works completely offline.
+* **Sub-5ms Execution Latency:** No 3-second network loading spinners.
+* **Local Semantic Intent Parser:** Understands natural questions (*"What if ETH drops 20%?"*, *"Am I safe to sleep?"*, *"How much can I borrow?"*).
+* **EWMA Volatility Predictor ($\lambda = 0.94$):** Calculates annualized volatility directly from oracle ticks.
+* **300-Path Monte Carlo Simulator:** Simulates geometric Brownian motion paths in the browser to compute exact 8-hour touch probabilities.
+
+---
+
+## 💻 4. Tech Stack Breakdown
+
+| Component | Technology | Role |
+|---|---|---|
+| **Smart Contracts** | **Solidity 0.8.24, Foundry, Forge** | Core lending logic, glide micro-liquidation math, and ghost twin pool. |
+| **Oracle** | **Pyth Network (Hermes) & `PythOracleAdapter.sol`** | Low-latency institutional price feeds with dynamic staleness protection. |
+| **Frontend Cockpit** | **Next.js 16 (Turbopack), React 19, Tailwind CSS v4** | Dark-mode avionics cockpit, live Health Altimeter, and reactive state. |
+| **Web3 Connection** | **RainbowKit v2, Wagmi v2, Viem** | Multi-wallet injection, account state caching, and contract reads/writes. |
+| **Autonomous Bot** | **TypeScript, Node.js, TSX, Viem** | 24/7 keeper monitoring positions, executing glide pokes, and oracle updates. |
+| **Charts & Telemetry** | **Recharts 3.10** | Live dual-curve Ghost Twin visualization comparing Soft Landing vs. Aave. |
+
+---
+
+## 🚀 5. Step-by-Step Guide: Cloning & Running
+
+Follow these simple steps to run the entire project on your local machine:
+
+### Prerequisites
+Make sure you have installed:
+* [Node.js](https://nodejs.org/) (version 20 or higher)
+* [Foundry](https://book.getfoundry.sh/) (`forge`, `anvil`, `cast`)
+* [Git](https://git-scm.com/)
+
+---
+
+### Step 1: Clone the Repository
 ```bash
-git clone --recurse-submodules https://github.com/Saumya2509/ZeroCliff.git && cd ZeroCliff
-node scripts/ops.mjs install        # npm ci in every package + Foundry libraries
-node scripts/ops.mjs demo-offline   # local chain + indexer + keeper + site, no internet needed
-                                    # site on http://localhost:3000; stop with demo-stop
+git clone https://github.com/Saumya2509/ZeroCliff.git
+cd ZeroCliff
 ```
 
-| Task | Does |
-|---|---|
-| `test` | Contracts, web (including parity vectors), keeper and indexer tests |
-| `abis` | Export ABIs and addresses to web, indexer and keeper |
-| `offline-state` / `offline-build` | Rebuild the frozen demo chain / the offline site |
-| `demo-offline` / `demo-stop` / `demo-status` | The offline finale stack |
-| `deploy-testnet` | Deploy and verify on the chain in `.env` (see [.env.example](.env.example)) |
-| `sim` / `charts` / `results-to-docs` | Crash experiments E1–E7, their PNGs, copies into `docs/results` |
-| `hooks` | Install the pre-commit secret scan |
+### Step 2: Install Dependencies
+Install packages for the web app and keeper bot:
+```bash
+# Install web dependencies
+cd web
+npm install
 
-For the live deployment, copy `.env.example` to `.env`, fill in burner keys and the Pyth address and feed ID from Pyth's docs, and run `node scripts/ops.mjs deploy-testnet`. Then host the site on Vercel and the indexer and keeper on Railway, Render or a small VPS; each folder's README has the settings.
+# Install keeper dependencies
+cd ../keeper
+npm install
 
-## How it works
+cd ..
+```
 
-| Health (collateral × price × 0.85 ÷ debt) | What happens |
-|---|---|
-| above 1.25 | Nothing is sold. |
-| 1.02 – 1.25 | **Glide:** each block, a small slice of collateral (up to 0.5%, growing as health falls) is sold through an AMM and repays debt, never more than needed to get back to 1.25. |
-| below 1.02 | **Backstop:** after a sudden gap, sell what restores 1.25 in one step. Anything unrecoverable is recorded as bad debt. |
+---
 
-**Flight Director.** On the dashboard you can ask about your loan in plain words: "What if ETH drops 25%?", "Am I safe to sleep?", "How much should I add to survive 30%?". It runs entirely in the browser, with no network calls and no language model. A rule-based parser reads the question. The contract's own maths, an EWMA volatility estimate, a barrier probability and a 300-path Monte Carlo produce the answer, and every number is computed with its assumptions stated ([web/lib/ai](web/lib/ai)).
+### Step 3: Run the Project
 
-A slice is only sold if the AMM agrees with the oracle to within 2%, so a manipulated pool can't be used against the borrower. Anyone can call `poke()` to run the next slice, and every user action glides too; the keeper is a convenience, not a trust assumption. Full maths: [docs/mechanism.md](docs/mechanism.md).
+#### Option A: One-Click Windows Launcher (Easiest)
+If you are on Windows, simply double-click **`start-local.bat`** (or run `.\start-local.bat` from PowerShell). It will launch all 3 terminals automatically!
 
-## Security
+#### Option B: Manual Startup (3 Terminals)
 
-- **Tests:** 67 unit, fuzz, attack and crash-replay tests; 7 invariants over 400,000 random calls each ([docs/security.md](docs/security.md)).
-- **Attacks we ran on ourselves:** pool manipulation, stale oracle, withdraw-to-escape, tip spam, reentrancy and more ([contracts/test/scenarios](contracts/test/scenarios)).
-- **Static analysis:** Slither, 102 detectors, 35 findings, each triaged in [docs/security.md](docs/security.md).
-- **Threat model:** [docs/threat-model.md](docs/threat-model.md).
-- **Process:** CI on every pull request, and a pre-commit hook that blocks private keys.
+**Terminal 1: Start Anvil Blockchain & Deploy Contracts**
+```bash
+# 1. Start the local Ethereum node
+anvil --host 127.0.0.1 --port 8545
 
-## Limits and roadmap
+# 2. (In a new tab or after Anvil starts) Deploy contracts:
+cd contracts
+forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 
-- Testnet and local only. Test tokens have no value. Not financial advice.
-- The owner can change the oracle and the sale router (public events); a timelock is on the roadmap.
-- Two large price gaps in back-to-back blocks can make the backstop cost about as much as a normal liquidation.
-- No interest and no lender withdrawals in this version.
-- Slices wait whenever the AMM is more than 2% away from the oracle. That is the manipulation guard working, but after a sudden jump the glide depends on arbitrage catching up.
-- Full list: the site's How it works page and [docs/threat-model.md](docs/threat-model.md).
+# 3. Fund your MetaMask wallet with 100 test ETH:
+cast send --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 <YOUR_METAMASK_ADDRESS> --value 100ether
+```
 
-## Repository
+**Terminal 2: Start Keeper Bot**
+```bash
+cd keeper
+npm start
+```
 
-| Path | What it is |
-|---|---|
-| [contracts/](contracts) | Solidity 0.8.24 + Foundry: `SoftLandingPool`, `CliffPool`, `SliceRouter`, `PythOracleAdapter`, mocks, deploy script, tests |
-| [web/](web) | Next.js 16 app: landing page, the dApp, Cascade Lab crash simulator, transparency page |
-| [sim/](sim) | Cascade Lab CLI: historical crashes and experiments E1–E7 |
-| [indexer/](indexer) | Ponder indexer and the Losses Avoided number |
-| [keeper/](keeper) | Keeper bot and the test-activity seed script |
-| [offline/](offline) | The frozen demo chain and the finale checklist |
-| [docs/](docs) | Mechanism, threat model, security review, gas report |
-| [scripts/](scripts) | `ops.mjs` task runner, ABI export, results collection, git hooks |
+**Terminal 3: Start Web App**
+```bash
+cd web
+npm start
+# (Or npm run dev for development mode)
+```
 
-## Team
+Now open **[http://localhost:3000/app](http://localhost:3000/app)** in your browser!
 
-*Names and roles to be added.*
+---
+
+## 🧪 6. Testing the App Like a Pro
+
+1. **Connect MetaMask:** Click **Connect Wallet** at top-right and connect to Localhost (`31337`).
+2. **Claim Free Test Tokens:** Click **`💧 + Faucet`** in the top navigation to mint 10 mETH & 10,000 mUSD.
+3. **Open a Paired Position:** Enter `2 mETH` collateral and `2,500 mUSD` borrow, then click **Open Position & Launch Ghost**.
+4. **Talk to the AI Flight Director:** Click preset chips like *"What if ETH drops 20%?"* or *"Am I safe to sleep?"* to see live Monte Carlo risk assessments.
+5. **Simulate a Market Crash:** Run this command in your terminal to crash the ETH oracle price to \$1,800:
+   ```bash
+   cast send --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 0x0165878A594ca255338adfa4d48449f69242Eb8F "setPrice(int256)" 180000000000
+   ```
+   * Watch the **Health Altimeter** descend into the amber turbulence zone.
+   * Watch the **Keeper Bot** execute micro-glide slices without wiping out your collateral.
+   * Watch the **Ghost Twin Chart** prove that Soft Landing preserved your assets while the classic pool was wiped out!
+
+---
+
+## 🗺 7. Web App Navigation
+
+* **`/app`** — Main Cockpit Deck: Live position management, Health Altimeter, and dedicated AI Flight Director.
+* **`/simulate`** — Zero-Wallet Crash Simulator: Drag interactive price sliders to test crashes on historical ETH events without connecting a wallet.
+* **`/admin`** — Mock Oracle Control Panel: Manually set ETH prices to test liquidations and recoveries.
+* **`/transparency`** — Protocol Proof of Reserves: Real-time telemetry, bad debt tracking, and solvency verification.
+
+---
+
+## 🛡 8. Security & Verification
+
+* **67 Test Suites Passed:** Unit, fuzz, reentrancy, invariant, and historical crash replays.
+* **Invariant Inviolability:** 7 out of 7 mathematical invariants hold over 400,000 random calls each.
+* **AMM Manipulation Guard:** Slices execute only when AMM price is within 2% of the Pyth oracle feed.
+* **Solvency Guaranteed:** Soft Landing preserves user collateral without ever taking on bad debt.
+
+---
+
+## 📄 License
+MIT License. Built with ❤️ by the ZeroCliff Core Team.

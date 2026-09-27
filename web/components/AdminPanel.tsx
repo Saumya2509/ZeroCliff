@@ -5,13 +5,13 @@ import { useAccount, useReadContract } from "wagmi";
 import { usePrice } from "@/hooks/usePosition";
 import { useTxSequence, type TxStep } from "@/hooks/useTxSequence";
 import { deployment, isDeployed, mockOracle } from "@/lib/contracts";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, parseAmount } from "@/lib/format";
 import { send } from "@/lib/tx";
 import { NotDeployed } from "./NotDeployed";
 import { TxProgress } from "./TxProgress";
 import { Button, Card, Notice } from "./ui";
 
-// Hidden demo route. Controls render only for the MockOracle owner; the contract enforces it anyway.
+// Admin demo route for MockOracle price control and liquidations demonstration.
 
 const RESET = 3_500n * 10n ** 18n;
 // The crash script: stepwise −45% so the glide is visible block by block, like the stylised replay.
@@ -22,24 +22,37 @@ export function AdminPanel() {
   const owner = useReadContract({ ...mockOracle, functionName: "owner", query: { enabled: isDeployed } });
   const { price } = usePrice();
   const tx = useTxSequence();
-  const [delaySec, setDelaySec] = useState(20);
+  const [delaySec, setDelaySec] = useState(15);
+  const [customPrice, setCustomPrice] = useState("");
 
   if (!isDeployed) return <NotDeployed />;
   if (deployment.oracleMode !== "mock")
     return <Notice title="This deployment uses the live Pyth price">Demo price controls only work on deployments that use MockOracle.</Notice>;
   if (!address) return <Notice title="Connect the demo admin wallet">Controls appear for the MockOracle owner only.</Notice>;
   if (owner.data && owner.data.toLowerCase() !== address.toLowerCase())
-    return <Notice title="Not the demo admin">This wallet doesn’t own the MockOracle, so there is nothing to show here.</Notice>;
+    return (
+      <Notice title="Not the demo admin">
+        This wallet ({address.slice(0, 6)}…{address.slice(-4)}) does not own the MockOracle contract. Owner is {owner.data.slice(0, 6)}…{owner.data.slice(-4)}.
+      </Notice>
+    );
 
   const setTo = (p: bigint, label: string): TxStep => ({
     label,
     run: () => send({ ...mockOracle, functionName: "setPrice", args: [p], account: address }),
   });
+
   const move = (bps: number) => {
     if (!price) return;
     const p = (price * BigInt(10_000 + bps)) / 10_000n;
     tx.run([setTo(p, `Set price to ${formatPrice(p)} (${bps > 0 ? "+" : ""}${bps / 100}%)`)]);
   };
+
+  const setCustom = () => {
+    const p = parseAmount(customPrice);
+    if (!p || p === 0n) return;
+    tx.run([setTo(p, `Set price to ${formatPrice(p)}`)]);
+  };
+
   const crash = async () => {
     if (!price) return;
     let p = price;
@@ -58,24 +71,69 @@ export function AdminPanel() {
   };
 
   return (
-    <Card title="Oracle price" description={price ? `Now ${formatPrice(price)}` : "Loading…"}>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => move(-500)} disabled={tx.running}>Price −5%</Button>
-        <Button onClick={() => move(-2500)} disabled={tx.running}>Price −25%</Button>
-        <Button onClick={() => move(1000)} disabled={tx.running}>Price +10%</Button>
-        <Button onClick={() => tx.run([setTo(RESET, "Reset to 3,500.00 mUSD")])} disabled={tx.running}>Reset to 3,500</Button>
-      </div>
-      <div className="mt-6 border-t border-border pt-4">
-        <p className="text-sm font-medium">Crash script</p>
-        <p className="mt-1 text-sm text-muted">Six drops totalling about −45%, spaced out so the glide shows block by block.</p>
-        <label className="mt-3 flex items-center gap-3 text-sm">
-          Seconds between steps
-          <input type="number" min={2} max={120} value={delaySec} onChange={(e) => setDelaySec(Number(e.target.value) || 20)}
-            className="num min-h-11 w-20 rounded-sm border border-border bg-surface px-2" />
-        </label>
-        <Button variant="primary" className="mt-3" onClick={crash} disabled={tx.running || !price}>Roll crash script</Button>
-      </div>
-      <TxProgress steps={tx.steps} error={tx.error} />
-    </Card>
+    <div className="space-y-6">
+      <Card title="Oracle Price Control" description={price ? `Current Pyth / Mock Feed: ${formatPrice(price)}` : "Loading…"}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1.5">
+              Set Exact Price (USD)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                placeholder="e.g. 2000"
+                value={customPrice}
+                onChange={(e) => setCustomPrice(e.target.value)}
+                className="num min-h-10 w-48 rounded-lg border border-border bg-surface px-3 text-sm font-mono text-text outline-none focus:border-safe"
+              />
+              <Button onClick={setCustom} disabled={tx.running || !customPrice} variant="primary">
+                Set Custom Price
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
+              Quick Price Adjustments
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => move(-500)} disabled={tx.running}>−5% Shock</Button>
+              <Button onClick={() => move(-1500)} disabled={tx.running}>−15% Shock</Button>
+              <Button onClick={() => move(-2500)} disabled={tx.running}>−25% Crash</Button>
+              <Button onClick={() => move(1000)} disabled={tx.running}>+10% Rally</Button>
+              <Button onClick={() => tx.run([setTo(RESET, "Reset to 3,500.00 mUSD")])} disabled={tx.running}>
+                Reset to $3,500
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <p className="text-sm font-medium text-text">Simulated Cascading Flash Crash</p>
+          <p className="mt-1 text-xs text-muted">
+            Executes 6 consecutive price drops totalling ~45% drawdown with block delays, demonstrating Soft Landing liquidation glides vs classic cliff liquidations live.
+          </p>
+          <div className="mt-3 flex items-center gap-3 text-xs">
+            <label className="flex items-center gap-2 text-muted">
+              Delay between drops:
+              <input
+                type="number"
+                min={2}
+                max={120}
+                value={delaySec}
+                onChange={(e) => setDelaySec(Number(e.target.value) || 15)}
+                className="num h-8 w-16 rounded border border-border bg-surface px-2 text-center text-xs"
+              />
+              seconds
+            </label>
+            <Button variant="primary" onClick={crash} disabled={tx.running || !price}>
+              Trigger Crash Script
+            </Button>
+          </div>
+        </div>
+
+        <TxProgress steps={tx.steps} error={tx.error} />
+      </Card>
+    </div>
   );
 }

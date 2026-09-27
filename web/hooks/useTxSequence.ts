@@ -50,6 +50,9 @@ export function useTxSequence() {
           if (receipt.status !== "success") throw new Error("Transaction reverted");
           update(i, { status: "done", block: receipt.blockNumber });
           await qc.invalidateQueries();
+          if (i < seq.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+          }
         }
         return true;
       } catch (e) {
