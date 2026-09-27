@@ -137,10 +137,10 @@ export function Dashboard() {
             {/* Tab navigation */}
             <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border/80 pb-3">
               {[
-                { id: "ghost" as const, label: "✦ Ghost Twin", hint: "Compare vs classic cliff" },
-                { id: "forecast" as const, label: "⚡ Price Shock", hint: "Landing forecast" },
-                { id: "copilot" as const, label: "✈ Flight Copilot", hint: "Local risk assistant" },
-                { id: "activity" as const, label: "📜 Activity", hint: "Recent onchain events" },
+                { id: "copilot" as const, label: "🤖 AI Flight Director", isAi: true, hint: "100% Local Quant AI (10.md)" },
+                { id: "ghost" as const, label: "✦ Ghost Twin", isAi: false, hint: "Compare vs classic cliff" },
+                { id: "forecast" as const, label: "⚡ Price Shock", isAi: false, hint: "Landing forecast" },
+                { id: "activity" as const, label: "📜 Activity", isAi: false, hint: "Recent onchain events" },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -152,6 +152,11 @@ export function Dashboard() {
                   }`}
                 >
                   <span>{t.label}</span>
+                  {t.isAi && (
+                    <span className="rounded-full bg-safe/20 px-1.5 py-0.5 text-[10px] font-mono font-bold text-safe">
+                      10.md
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -190,8 +195,8 @@ export function Dashboard() {
 
               {activeTab === "copilot" && (
                 <FlightDirector
-                  collateral={pos.hasPosition && soft ? soft.collateral : 0n}
-                  debt={pos.hasPosition && soft ? soft.debt : 0n}
+                  collateral={pos.hasPosition && soft ? soft.collateral : forecastInput.collateral}
+                  debt={pos.hasPosition && soft ? soft.debt : forecastInput.debt}
                   price={price}
                   history={priceHistory.data}
                 />
