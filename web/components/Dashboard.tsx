@@ -19,10 +19,11 @@ import { LandingForecast } from "./LandingForecast";
 import { NetworkGuard } from "./NetworkGuard";
 import { NotDeployed } from "./NotDeployed";
 import { PositionCard } from "./PositionCard";
+import { Bot, Sparkles } from "lucide-react";
 import { Card, Notice } from "./ui";
 import { WalletButton } from "./WalletButton";
 
-type TelemetryTab = "ghost" | "forecast" | "copilot" | "activity";
+type TelemetryTab = "ghost" | "forecast" | "activity";
 
 export function Dashboard() {
   const { address, isConnected } = useAccount();
@@ -78,7 +79,7 @@ export function Dashboard() {
 
       {/* Cockpit Status Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface/60 p-3 backdrop-blur sm:px-5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className={`h-2.5 w-2.5 rounded-full ${
             state === "safe" ? "bg-safe shadow-[0_0_8px_var(--safe)] animate-pulse" : state === "gliding" ? "bg-glide shadow-[0_0_8px_var(--glide)] animate-pulse" : "bg-cliff shadow-[0_0_8px_var(--cliff)] animate-pulse"
           }`} />
@@ -89,6 +90,11 @@ export function Dashboard() {
           <span className="font-mono text-xs text-muted">
             ETH Price: <strong className="text-text">{price ? formatPrice(price) : "—"}</strong>
           </span>
+          <span className="text-muted">·</span>
+          <div className="flex items-center gap-1.5 rounded-full border border-safe/30 bg-safe/10 px-2 py-0.5 font-mono text-[10px] font-bold text-safe">
+            <Bot className="h-3 w-3" />
+            <span>100% LOCAL AI ACTIVE (10.md)</span>
+          </div>
         </div>
 
         {/* Sleek Faucet Pill */}
@@ -132,82 +138,75 @@ export function Dashboard() {
             <HealthAltimeter health={shownHealth} />
           </Card>
 
-          {/* Interactive Telemetry Tabs */}
-          <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
-            {/* Tab navigation */}
-            <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border/80 pb-3">
-              {[
-                { id: "copilot" as const, label: "🤖 AI Flight Director", isAi: true, hint: "100% Local Quant AI (10.md)" },
-                { id: "ghost" as const, label: "✦ Ghost Twin", isAi: false, hint: "Compare vs classic cliff" },
-                { id: "forecast" as const, label: "⚡ Price Shock", isAi: false, hint: "Landing forecast" },
-                { id: "activity" as const, label: "📜 Activity", isAi: false, hint: "Recent onchain events" },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                    activeTab === t.id
-                      ? "bg-bg text-text shadow-sm border border-border font-semibold text-safe"
-                      : "text-muted hover:bg-bg/50 hover:text-text"
-                  }`}
-                >
-                  <span>{t.label}</span>
-                  {t.isAi && (
-                    <span className="rounded-full bg-safe/20 px-1.5 py-0.5 text-[10px] font-mono font-bold text-safe">
-                      10.md
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+            {/* Dedicated AI Flight Director (100% Local Quant Engine · 10.md) - ALWAYS VISIBLE */}
+            <FlightDirector
+              collateral={pos.hasPosition && soft ? soft.collateral : forecastInput.collateral}
+              debt={pos.hasPosition && soft ? soft.debt : forecastInput.debt}
+              price={price}
+              history={priceHistory.data}
+            />
 
-            {/* Tab Panes */}
-            <div>
-              {activeTab === "ghost" && (
-                <div>
-                  <p className="mb-2 text-xs text-muted">
-                    Solid line: your Soft Landing position. Dashed line: your mirrored ghost loan in a classic cliff liquidation pool.
-                  </p>
-                  <GhostChart
-                    points={history.data?.points ?? []}
-                    loading={history.isLoading}
-                    current={
-                      block && pos.soft && pos.ghost ? { block: Number(block), soft: pos.soft.collateral, ghost: pos.ghost.collateral } : undefined
-                    }
+            {/* Deep-Dive Simulation & Onchain Event Telemetry */}
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+              {/* Tab navigation */}
+              <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border/80 pb-3">
+                {[
+                  { id: "ghost" as const, label: "✦ Ghost Twin", hint: "Compare vs classic cliff" },
+                  { id: "forecast" as const, label: "⚡ Price Shock Simulator", hint: "Landing forecast" },
+                  { id: "activity" as const, label: "📜 Activity Log", hint: "Recent onchain events" },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      activeTab === t.id
+                        ? "bg-bg text-text shadow-sm border border-border font-semibold text-safe"
+                        : "text-muted hover:bg-bg/50 hover:text-text"
+                    }`}
+                  >
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Panes */}
+              <div>
+                {activeTab === "ghost" && (
+                  <div>
+                    <p className="mb-2 text-xs text-muted">
+                      Solid line: your Soft Landing position. Dashed line: your mirrored ghost loan in a classic cliff liquidation pool.
+                    </p>
+                    <GhostChart
+                      points={history.data?.points ?? []}
+                      loading={history.isLoading}
+                      current={
+                        block && pos.soft && pos.ghost ? { block: Number(block), soft: pos.soft.collateral, ghost: pos.ghost.collateral } : undefined
+                      }
+                    />
+                    {history.error && (
+                      <div className="mt-3">
+                        <Notice title="History unavailable">The RPC refused the event query. Live values above are still current.</Notice>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "forecast" && (
+                  <LandingForecast
+                    user={address}
+                    collateral={forecastInput.collateral}
+                    debt={forecastInput.debt}
+                    price={price}
+                    hasPosition={pos.hasPosition}
                   />
-                  {history.error && (
-                    <div className="mt-3">
-                      <Notice title="History unavailable">The RPC refused the event query. Live values above are still current.</Notice>
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
 
-              {activeTab === "forecast" && (
-                <LandingForecast
-                  user={address}
-                  collateral={forecastInput.collateral}
-                  debt={forecastInput.debt}
-                  price={price}
-                  hasPosition={pos.hasPosition}
-                />
-              )}
-
-              {activeTab === "copilot" && (
-                <FlightDirector
-                  collateral={pos.hasPosition && soft ? soft.collateral : forecastInput.collateral}
-                  debt={pos.hasPosition && soft ? soft.debt : forecastInput.debt}
-                  price={price}
-                  history={priceHistory.data}
-                />
-              )}
-
-              {activeTab === "activity" && (
-                <ActivityFeed items={history.data?.items} loading={history.isLoading} />
-              )}
+                {activeTab === "activity" && (
+                  <ActivityFeed items={history.data?.items} loading={history.isLoading} />
+                )}
+              </div>
             </div>
           </div>
-        </div>
       </div>
     </div>
   );
