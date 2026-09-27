@@ -10,6 +10,7 @@ gas_limit = "18446744073709551615"
 fs_permissions = [
   { access = "read-write", path = "./vectors" },
   { access = "read-write", path = "./results" },
+  { access = "read-write", path = "./deployments" },
 ]
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",

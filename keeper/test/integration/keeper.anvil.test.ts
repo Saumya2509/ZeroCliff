@@ -35,6 +35,7 @@ describe.skipIf(!enabled)("keeper on anvil (existing local deployment)", () => {
   const keeperKey = generatePrivateKey();
   const users: Address[] = [];
   let snapshot: Hex;
+  let wasAutomine = true;
   let keeper: Keeper;
   let crashBlock: bigint;
 
@@ -42,20 +43,23 @@ describe.skipIf(!enabled)("keeper on anvil (existing local deployment)", () => {
     const r = await pub.waitForTransactionReceipt({ hash: await w.writeContract(p) });
     if (r.status !== "success") throw new Error(`${String(p.functionName)} reverted`);
   };
-  const idle = async () => {
-    // wait until the keeper has seen the head and nothing it sent is still pending
-    for (let i = 0; i < 400; i++) {
-      const head = await pub.getBlockNumber();
+  /** Wait until the chain has advanced `n` blocks past `from` and the keeper has processed them. */
+  const runBlocks = async (from: bigint, n: bigint) => {
+    for (let i = 0; i < 600; i++) {
       const s = keeper.status();
-      if (s.lastBlock === head.toString() && s.pending === 0) return;
-      await new Promise((r) => setTimeout(r, 50));
+      if (s.lastBlock !== null && BigInt(s.lastBlock) >= from + n && s.pending === 0) return;
+      await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error("keeper did not catch up");
+    throw new Error(`keeper did not process ${n} blocks: ${JSON.stringify(keeper.status())}`);
   };
 
   beforeAll(async () => {
     owner = wallet(process.env.OWNER_PRIVATE_KEY as Hex);
     snapshot = await test.snapshot();
+    // Instant mining for the ~200 setup transactions (a 2 s block-time chain would take minutes);
+    // blocks are then mined one at a time below. Mining mode is not part of the snapshot, so it is restored.
+    wasAutomine = await test.getAutomine();
+    await test.setAutomine(true);
     const [price] = await pub.readContract({ address: d.mockOracle, abi: mockOracleAbi, functionName: "getPrice" });
 
     // 30 burner users, each with the same position in both pools, opening health 1.40–1.55
@@ -89,15 +93,20 @@ describe.skipIf(!enabled)("keeper on anvil (existing local deployment)", () => {
     // the crash: −20% on the oracle; the keeper's arbitrageur drags the AMM after it
     await send(owner, { address: d.mockOracle, abi: mockOracleAbi, functionName: "setPrice", args: [(price * 80n) / 100n] });
     crashBlock = await pub.getBlockNumber();
-    for (let i = 0; i < 50; i++) {
-      await test.mine({ blocks: 1 });
-      await idle();
-    }
+    // Real 1 s blocks from here, as on a live chain. (With instant mining every keeper transaction mines a
+    // block, which triggers the next tick, so a keeper with at-risk users never goes quiet.)
+    await test.setAutomine(false);
+    await test.setIntervalMining({ interval: 1 });
+    await runBlocks(crashBlock, 50n);
   }, 600_000);
 
   afterAll(async () => {
     await keeper?.stop();
     if (snapshot) await test.revert({ id: snapshot }); // leave the chain as we found it
+    if (!wasAutomine) {
+      await test.setAutomine(false);
+      await test.setIntervalMining({ interval: 2 }); // the offline demo's block time
+    }
   });
 
   it("glided every position that fell below comfort", async () => {

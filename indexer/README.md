@@ -9,7 +9,8 @@ Needs a deployment record at `../contracts/deployments/active.json` (addresses +
 ```bash
 npm install
 cp .env.example .env.local      # RPC_URL for testnets; anvil (31337) defaults to 127.0.0.1:8545
-npm run dev                     # http://localhost:42069
+npm run dev                     # http://localhost:42069 (development, hot reload)
+npm run start                   # production: ponder start --schema soft_landing
 ```
 
 Then set `NEXT_PUBLIC_INDEXER_URL=http://localhost:42069` in `web/.env.local`.
@@ -21,7 +22,10 @@ Then set `NEXT_PUBLIC_INDEXER_URL=http://localhost:42069` in `web/.env.local`.
 | SoftLandingPool | Deposited, Withdrawn, Borrowed, Repaid, Glided, BackstopLiquidated, GlideSkipped, Refunded |
 | CliffPool | Deposited, Withdrawn, Borrowed, Repaid, Liquidated, BadDebtRecorded |
 | MockOracle | PriceSet (records a price tick) |
-| every `PRICE_TICK_EVERY` blocks | oracle price (whatever the pool reads, mock or Pyth) and AMM spot |
+| MockAMM `Sync` | AMM price, from the reserves in the event |
+| every `PRICE_TICK_EVERY` blocks, from the head | oracle price (whatever the pool reads, mock or Pyth) and AMM spot |
+
+Price history comes from events rather than state reads at old blocks. Those reads are slow on public RPCs, and impossible on an anvil restarted from saved state, where they stalled indexing in testing. The periodic ticks start at the chain head, and a failed read falls back to the last event price instead of stopping the indexer.
 
 Positions are rebuilt from signed deltas: every state change in the contracts emits one of these events, including the backstop's written-off shortfall and the cliff's bad debt.
 
@@ -32,6 +36,7 @@ Positions are rebuilt from signed deltas: every state change in the contracts em
 | `GET /stats/losses-avoided` | `totalMeth`, `pairedUsers`, `usersBetter` / `usersWorse` / `usersEqual`, `seededUsers`, `price`, `asOfBlock`, `definition` |
 | `GET /stats/pool` | pool rows (totals, glide / backstop / skip / liquidation counts, bad debt), `asOfBlock` |
 | `GET /activity/:user?limit=50` | the user's positions and events, newest first (≤ 1,000) |
+| `GET /prices?limit=300` | recent oracle price ticks, oldest first (the Flight Director measures volatility from them) |
 | `/graphql` | Ponder's GraphQL over every table |
 | `/health`, `/ready`, `/status` | Ponder built-ins |
 
@@ -47,6 +52,10 @@ total     = Σ advantage (signed: users the glide did worse for are subtracted, 
 
 Net equity, not collateral lost: a glide sells collateral but repays debt too, so counting collateral alone would exaggerate. |advantage| under 0.000001 mETH counts as equal. Wallets listed in `contracts/deployments/seeded.json` (written by `keeper/scripts/seed-activity.ts`) are counted in `seededUsers` so the site can label them. Tests: `npm test`.
 
-## Not verified yet
+## Verified
 
-The handlers and API typecheck against Ponder's generated types, and the Losses Avoided maths is unit-tested. The indexer has not yet been run against a live deployment, because none exists until you deploy. Start it against anvil after deploying, and check `/stats/pool` against the pool's on-chain `totalCollateral` / `totalDebt`.
+Run against the frozen offline chain with the keeper live (`node scripts/ops.mjs demo-offline`), through a stepped crash to −35% (28 glide slices, 0 backstops, 8 cliff liquidations):
+- `/stats/pool` totals matched `totalDebt` and `totalCollateral` read on-chain with `cast call`, to the wei, for both pools.
+- `/stats/losses-avoided` counted all 40 seeded pairs and labelled them as seeded.
+
+The API answers during the backfill; every response carries `asOfBlock`, so a partial count is labelled as such. `demo-offline` waits until the indexer has reached the chain head before reporting it up.

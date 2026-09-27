@@ -22,7 +22,9 @@ export default createConfig({
     MockOracle: { chain: "app", abi: mockOracleAbi, address: d.mockOracle, startBlock: d.startBlock },
   },
   blocks: {
-    // Oracle and AMM price every N blocks, for charts and for valuing positions in /stats/losses-avoided.
-    PriceTick: { chain: "app", startBlock: d.startBlock, interval: Number(process.env.PRICE_TICK_EVERY ?? 5) },
+    // Oracle and AMM price every N blocks from the head onwards, for valuing positions in /stats/losses-avoided.
+    // History comes from PriceSet / Sync events instead: reading state at old blocks is slow on public RPCs
+    // and impossible on an anvil restarted from saved state.
+    PriceTick: { chain: "app", startBlock: "latest", interval: Number(process.env.PRICE_TICK_EVERY ?? 5) },
   },
 });

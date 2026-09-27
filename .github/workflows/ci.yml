@@ -1,0 +1,57 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge fmt --check
+        working-directory: contracts
+      - run: forge build --sizes
+        working-directory: contracts
+      - name: forge test (output kept for the results collector)
+        run: forge test -vv | tee results/test-output.txt
+        working-directory: contracts
+      - uses: actions/setup-node@v4
+        with: { node-version: lts/* }
+      - name: collect results (tests, invariants, gas, slippage) for /transparency
+        run: node scripts/collect-results.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-results
+          path: web/lib/results.json
+      - name: slither (report only)
+        run: pip install slither-analyzer && slither . --filter-paths "lib|test|script" || true
+        working-directory: contracts
+
+  web:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive } # engine parity tests read contracts/vectors
+      - uses: actions/setup-node@v4
+        with: { node-version: lts/*, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test # includes the glide and engine parity vectors
+      - run: npm run build
+
+  services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: lts/* }
+      - name: keeper
+        working-directory: keeper
+        run: npm ci && npm run typecheck && npm test
+      - name: indexer
+        working-directory: indexer
+        run: npm ci && npm run codegen && npm run typecheck && npm test

@@ -5,7 +5,7 @@ Next.js 16 (App Router) · wagmi 2 · viem · RainbowKit · TanStack Query · Ta
 | Route | What it is |
 |---|---|
 | `/` | Pitch, hero chart (computed by the replay engine), losses-avoided counter |
-| `/app` | The dApp: faucet, open position (+ ghost), Health Altimeter, ghost chart, Landing Forecast, activity |
+| `/app` | The dApp: faucet, open position (+ ghost), Health Altimeter, ghost chart, Landing Forecast, Flight Director, activity |
 | `/simulate` | Cascade Lab: real ETH crashes through cliff vs glide, each with its own AMM; experiments E1–E7 |
 | `/transparency` | Live pool stats, contracts, test / invariant / gas / slippage results |
 | `/how-it-works` | Glide curve, formulas, parameters, threat model, known limits |
@@ -27,6 +27,7 @@ Offline (anvil on 127.0.0.1:8545, injected wallet only): `NEXT_PUBLIC_MODE=offli
 - **Test results on /transparency:** `node ../scripts/collect-results.mjs` builds `lib/results.json` from `contracts/results/`.
 - **Maths:** `lib/sim/glide.ts` is a line-for-line bigint port of the contract. `lib/sim/glide.test.ts` checks it against all 50 contract test vectors; every one matches exactly.
 - **Cascade Lab (`/simulate`):** `lib/sim/run.ts` is the step loop; `amm.ts`, `router.ts` and `pools.ts` mirror MockAMM, SliceRouter, SoftLandingPool.poke and CliffPool.liquidate, checked by `lib/sim/engine.test.ts` against 100 vectors exported from the contracts. The page runs it in a Web Worker (`lib/sim/worker.ts`); the scenario lives in the URL, e.g. `/simulate?crash=may-2021&beta=0.3`. Crash data is in `public/crashes`, experiment results in `public/results` (both made by `../sim`, see its README).
+- **Flight Director (`/app`):** `lib/ai/flightDirector.ts`, a local risk assistant with no network calls and no language model. It has three layers: a rule-based question parser (keywords with typo tolerance, numbers by regex); a quant layer (price levels; EWMA volatility from the indexer's `/prices`, or a stated assumption; the probability of *touching* a level; a seeded 300-path Monte Carlo that runs the contract-verified maths); and advisories whose every number is computed. Tested in `lib/ai/flightDirector.test.ts` and `components/FlightDirector.test.tsx`.
 - **Deck charts:** with `npx next start -p 3100` running, `npm run charts` screenshots each experiment figure into `public/results/charts/e1.png … e7.png`.
 - **History and activity:** `hooks/useHistory.ts` reads the indexer's `/activity/:user` when `NEXT_PUBLIC_INDEXER_URL` is set, and falls back silently to contract events from the last ~5,000 blocks (`lib/fallbackActivity.ts`) when it is not or is down. The ghost chart is rebuilt backwards from the current position, so a truncated history starts later instead of being wrong.
 - **Losses Avoided (home):** the indexer's `/stats/losses-avoided` (see `../indexer/README.md` for the exact definition), shown with better / worse / equal counts, "as of block N", and a label for the team's seeded test positions. When the indexer is down it reads "Stats temporarily unavailable" instead of a stale number.

@@ -83,6 +83,14 @@ export const poolStats = onchainTable("pool_stats", (t) => ({
   updatedAt: t.bigint().notNull(),
 }));
 
+/** Latest prices known from events (AMM Sync, MockOracle PriceSet): the fallback when a state read fails. */
+export const market = onchainTable("market", (t) => ({
+  id: t.text().primaryKey(), // "latest"
+  amm: t.bigint(),
+  oracle: t.bigint(),
+  block: t.bigint().notNull(),
+}));
+
 export const priceTick = onchainTable("price_tick", (t) => ({
   id: t.text().primaryKey(), // block number
   oracle: t.bigint(), // null if the oracle reverted (stale / not set)

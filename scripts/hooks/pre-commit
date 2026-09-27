@@ -1,0 +1,24 @@
+#!/bin/sh
+# Pre-commit secret scan (md/manali/08 §2). Uses gitleaks when installed; otherwise a built-in check
+# that blocks any staged line containing a 32-byte hex private key, except anvil's public test keys.
+# Install with: node scripts/ops.mjs hooks
+
+if command -v gitleaks >/dev/null 2>&1; then
+  exec gitleaks protect --staged --redact -v
+fi
+
+# anvil's default accounts #0–#2: printed by every anvil, safe to appear in docs and scripts
+allow='ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80|59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d|5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'
+
+hits=$(git diff --cached -U0 --no-color -- . ':(exclude)*.lock' ':(exclude)*package-lock.json' ':(exclude)contracts/vectors/*' ':(exclude)offline/state.json' \
+  | grep -E '^\+' \
+  | grep -iE '(key|secret|private|mnemonic)[^=:]*[=:][[:space:]]*"?(0x)?[0-9a-f]{64}\b' \
+  | grep -viE "$allow")
+
+if [ -n "$hits" ]; then
+  echo "pre-commit: this commit looks like it contains a private key:" >&2
+  echo "$hits" | cut -c1-120 >&2
+  echo "Remove it (keys belong in .env, which is ignored). To override deliberately: git commit --no-verify" >&2
+  exit 1
+fi
+exit 0

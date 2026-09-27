@@ -52,6 +52,13 @@ app.get("/stats/pool", async (c) => {
   return c.json(json({ pools: rows, asOfBlock: await asOfBlock() }));
 });
 
+/** Recent oracle prices, oldest first: the Flight Director measures volatility from these. */
+app.get("/prices", async (c) => {
+  const limit = Math.min(2_000, Math.max(2, Number(c.req.query("limit") ?? 300) || 300));
+  const rows = await db.select().from(priceTick).where(isNotNull(priceTick.oracle)).orderBy(desc(priceTick.block)).limit(limit);
+  return c.json(json({ ticks: rows.reverse().map((r) => ({ block: r.block, timestamp: r.timestamp, oracle: r.oracle })), asOfBlock: await asOfBlock() }));
+});
+
 app.get("/activity/:user", async (c) => {
   const raw = c.req.param("user");
   if (!isAddress(raw)) return c.json({ error: "not an address" }, 400);

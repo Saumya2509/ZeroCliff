@@ -49,3 +49,10 @@ keeper/.seed-keys.json
 md/
 skill/
 .claude/
+
+# offline demo stack (the frozen chain offline/state.json is kept; runtime files are not)
+offline/*.log
+offline/pids.json
+offline/seed-keys.json
+contracts/deployments/31337.json
+contracts/broadcast/*/31337/

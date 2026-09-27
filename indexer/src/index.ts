@@ -1,5 +1,5 @@
 import { ponder, type Context } from "ponder:registry";
-import { action, glide, liquidation, poolStats, position, priceTick } from "ponder:schema";
+import { action, glide, liquidation, market, poolStats, position, priceTick } from "ponder:schema";
 import type { Address } from "viem";
 import { mockOracleAbi } from "../abis";
 
@@ -15,7 +15,17 @@ async function applyPosition(context: Context, pool: Pool, user: Address, block:
   const lost = x.lost ?? 0n;
   await context.db
     .insert(position)
-    .values({ id: `${pool}:${user}`, pool, user, collateral: c, debt: d, refunded, collateralLost: lost, openedAt: block, updatedAt: block })
+    .values({
+      id: `${pool}:${user}`,
+      pool,
+      user,
+      collateral: c,
+      debt: d,
+      refunded,
+      collateralLost: lost,
+      openedAt: block,
+      updatedAt: block,
+    })
     .onConflictDoUpdate((row) => ({
       collateral: row.collateral + c,
       debt: row.debt + d,
@@ -57,7 +67,17 @@ async function applyStats(context: Context, pool: Pool, block: bigint, s: Stats,
 const SIGN = { deposit: { c: 1n, d: 0n }, withdraw: { c: -1n, d: 0n }, borrow: { c: 0n, d: 1n }, repay: { c: 0n, d: -1n } } as const;
 type Kind = keyof typeof SIGN;
 
-async function onAction(context: Context, pool: Pool, kind: Kind, e: { args: { user: Address; amount: bigint }; block: { number: bigint; timestamp: bigint }; transaction: { hash: `0x${string}` }; log: { logIndex: number } }) {
+async function onAction(
+  context: Context,
+  pool: Pool,
+  kind: Kind,
+  e: {
+    args: { user: Address; amount: bigint };
+    block: { number: bigint; timestamp: bigint };
+    transaction: { hash: `0x${string}` };
+    log: { logIndex: number };
+  },
+) {
   const { user, amount } = e.args;
   await context.db.insert(action).values({
     id: `${e.transaction.hash}:${e.log.logIndex}`,
@@ -72,7 +92,10 @@ async function onAction(context: Context, pool: Pool, kind: Kind, e: { args: { u
   await applyPosition(context, pool, user, e.block.number, { c: SIGN[kind].c * amount, d: SIGN[kind].d * amount });
 }
 
-for (const [contract, pool] of [["SoftLandingPool", "soft"], ["CliffPool", "cliff"]] as const) {
+for (const [contract, pool] of [
+  ["SoftLandingPool", "soft"],
+  ["CliffPool", "cliff"],
+] as const) {
   ponder.on(`${contract}:Deposited`, ({ event, context }) => onAction(context, pool, "deposit", event));
   ponder.on(`${contract}:Withdrawn`, ({ event, context }) => onAction(context, pool, "withdraw", event));
   ponder.on(`${contract}:Borrowed`, ({ event, context }) => onAction(context, pool, "borrow", event));
@@ -115,7 +138,11 @@ ponder.on("SoftLandingPool:BackstopLiquidated", async ({ event, context }) => {
     txHash: event.transaction.hash,
   });
   // the shortfall is written off, so it leaves the user's debt too
-  await applyPosition(context, "soft", user, event.block.number, { c: -collateralSold, d: -(debtRepaid + shortfall), lost: collateralSold });
+  await applyPosition(context, "soft", user, event.block.number, {
+    c: -collateralSold,
+    d: -(debtRepaid + shortfall),
+    lost: collateralSold,
+  });
   await applyStats(context, "soft", event.block.number, { backstopCount: 1, badDebt: shortfall });
 });
 
@@ -153,27 +180,50 @@ ponder.on("CliffPool:BadDebtRecorded", async ({ event, context }) => {
 
 // ---------- prices ----------
 
-async function tick(context: Context, block: bigint, timestamp: bigint) {
-  const amm = await context.client.readContract({ ...context.contracts.MockAMM, functionName: "spotPrice", blockNumber: block });
-  // Whatever oracle the pool reads (mock or Pyth adapter); null while it is stale or unset.
-  let oracle: bigint | null = null;
-  try {
-    const addr = await context.client.readContract({ ...context.contracts.SoftLandingPool, functionName: "oracle", blockNumber: block });
-    [oracle] = await context.client.readContract({ abi: mockOracleAbi, address: addr, functionName: "getPrice", blockNumber: block });
-  } catch {
-    oracle = null;
-  }
+const WAD = 10n ** 18n;
+
+async function remember(context: Context, block: bigint, x: { amm?: bigint; oracle?: bigint }) {
   await context.db
-    .insert(priceTick)
-    .values({ id: block.toString(), oracle, amm, block, timestamp })
-    .onConflictDoUpdate({ oracle, amm });
+    .insert(market)
+    .values({ id: "latest", amm: x.amm ?? null, oracle: x.oracle ?? null, block })
+    .onConflictDoUpdate((row) => ({ amm: x.amm ?? row.amm, oracle: x.oracle ?? row.oracle, block }));
+}
+
+/**
+ * Record oracle and AMM price at `block`. Reads the chain when it can (the oracle may be Pyth, which emits
+ * nothing here), and falls back to the last prices seen in events: an anvil restarted from saved state has
+ * no historical state to read, and a failed read must never stop indexing.
+ */
+async function tick(context: Context, block: bigint, timestamp: bigint, read = true) {
+  const known = await context.db.find(market, { id: "latest" });
+  let amm = known?.amm ?? null;
+  let oracle = known?.oracle ?? null;
+  if (read)
+    try {
+      amm = await context.client.readContract({ ...context.contracts.MockAMM, functionName: "spotPrice", blockNumber: block });
+    } catch {}
+  if (read)
+    try {
+      const addr = await context.client.readContract({ ...context.contracts.SoftLandingPool, functionName: "oracle", blockNumber: block });
+      [oracle] = await context.client.readContract({ abi: mockOracleAbi, address: addr, functionName: "getPrice", blockNumber: block });
+    } catch {}
+  if (amm === null) return; // nothing known yet (before the AMM was seeded)
+  await context.db.insert(priceTick).values({ id: block.toString(), oracle, amm, block, timestamp }).onConflictDoUpdate({ oracle, amm });
 }
 
 ponder.on("PriceTick:block", async ({ event, context }) => {
   await tick(context, event.block.number, event.block.timestamp);
 });
 
+ponder.on("MockAMM:Sync", async ({ event, context }) => {
+  const { reserveA, reserveB } = event.args;
+  if (reserveA === 0n) return;
+  await remember(context, event.block.number, { amm: (reserveB * WAD) / reserveA });
+  await tick(context, event.block.number, event.block.timestamp, false); // prices known from history, no reads
+});
+
 // A price change is exactly when a fresh tick matters, so record one then as well.
 ponder.on("MockOracle:PriceSet", async ({ event, context }) => {
-  await tick(context, event.block.number, event.block.timestamp);
+  await remember(context, event.block.number, { oracle: event.args.price });
+  await tick(context, event.block.number, event.block.timestamp, false); // the event carries the price
 });

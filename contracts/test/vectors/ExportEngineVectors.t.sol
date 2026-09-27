@@ -25,13 +25,21 @@ contract ExportEngineVectorsTest is BaseTest {
 
         string[4] memory parts;
         string[] memory items = new string[](N);
-        for (uint256 i; i < N; ++i) items[i] = _ammItem(i);
+        for (uint256 i; i < N; ++i) {
+            items[i] = _ammItem(i);
+        }
         parts[0] = _join(items);
-        for (uint256 i; i < N; ++i) items[i] = _routerItem(i);
+        for (uint256 i; i < N; ++i) {
+            items[i] = _routerItem(i);
+        }
         parts[1] = _join(items);
-        for (uint256 i; i < N; ++i) items[i] = _cliffItem(i);
+        for (uint256 i; i < N; ++i) {
+            items[i] = _cliffItem(i);
+        }
         parts[2] = _join(items);
-        for (uint256 i; i < N; ++i) items[i] = _pokeItem(i);
+        for (uint256 i; i < N; ++i) {
+            items[i] = _pokeItem(i);
+        }
         parts[3] = _join(items);
 
         vm.writeFile(

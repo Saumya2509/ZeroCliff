@@ -49,4 +49,13 @@ npm run typecheck
 ANVIL_TEST=1 OWNER_PRIVATE_KEY=0x… npm run test:anvil
 ```
 
-`test:anvil` runs against your own local anvil deployment and deploys nothing. It snapshots anvil, opens 30 paired positions, drops the price 20%, runs the keeper for 50 blocks and asserts that every position glided and no keeper transaction reverted. Then it reverts the snapshot, so your chain is left unchanged. It skips when there is no chain-31337 mock deployment.
+`test:anvil` runs against a local deployment and deploys nothing. It needs a chain with no other keeper running, because two keepers would compete for the same positions. The frozen demo chain works:
+
+```bash
+anvil --load-state ../offline/state.json --block-time 2          # in another terminal
+ANVIL_TEST=1 OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   DEPLOYMENTS_PATH=../offline/deployments.json npm run test:anvil
+```
+
+(That key is anvil's public account #0, the owner of the demo mocks.) The test snapshots anvil and opens 30 paired positions with instant mining. It then crashes the price 20% and runs the keeper for 50 real 1-second blocks, asserting that every position glided and no keeper transaction reverted. Finally it reverts the snapshot and restores the chain's mining mode, leaving the chain as it was. It skips when there is no chain-31337 mock deployment. Last run: 30 of 30 glided, 0 reverted.
+
+In the offline demo (`node scripts/ops.mjs demo-offline`) the keeper arbitrages every block (`ARB_EVERY_BLOCKS=1`). Every 3 blocks lets a stepped crash outrun the pool, so the router refuses every slice and the demo shows no glide.
