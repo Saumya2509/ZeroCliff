@@ -18,6 +18,8 @@ import {CliffPool} from "../src/CliffPool.sol";
 ///         ORACLE_MODE=mock (default): MockOracle owned by the deployer. Local anvil and demo deployments.
 ///         ORACLE_MODE=pyth: PythOracleAdapter over PYTH_ADDRESS / PYTH_ETH_USD_FEED_ID. Public testnet.
 ///
+///         PYTH_MAX_AGE (seconds, default 7 days): oldest Pyth price accepted on testnet.
+///         No Pyth key required when using public Hermes (https://hermes.pyth.network).
 ///         Optional: START_PRICE (whole mUSD, default 3500; in Pyth mode the live price is used when fresh),
 ///         AMM_METH (default 1000), POOL_LIQUIDITY (mUSD per pool, default 1,000,000),
 ///         KEEPER_ADDRESS (gets mETH + mUSD inventory for arbitrage and ghost liquidations).
@@ -56,8 +58,11 @@ contract Deploy is Script {
 
         price = vm.envOr("START_PRICE", uint256(3_500)) * 1e18;
         if (pythMode) {
-            pythAdapter =
-                new PythOracleAdapter(IPyth(vm.envAddress("PYTH_ADDRESS")), vm.envBytes32("PYTH_ETH_USD_FEED_ID"));
+            pythAdapter = new PythOracleAdapter(
+                IPyth(vm.envAddress("PYTH_ADDRESS")),
+                vm.envBytes32("PYTH_ETH_USD_FEED_ID"),
+                vm.envOr("PYTH_MAX_AGE", uint256(7 days))
+            );
             oracle = pythAdapter;
             // Seed the AMM at the live price when the feed is fresh, so the router's 2% band is met from block one.
             try pythAdapter.getPrice() returns (uint256 p, uint256) {

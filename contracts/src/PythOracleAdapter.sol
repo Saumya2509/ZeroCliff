@@ -11,21 +11,27 @@ import {IOracle} from "./interfaces/IOracle.sol";
 contract PythOracleAdapter is IOracle {
     IPyth public immutable pyth;
     bytes32 public immutable feedId;
-    uint256 public constant MAX_AGE = 60; // seconds
+    /// @notice Oldest price accepted, in seconds. On mainnet this is typically 60s; on testnet we allow
+    ///         older prices (up to MAX_MAX_AGE, e.g. 7-30 days) because testnet feeds update infrequently.
+    uint256 public immutable maxAge;
+    uint256 public constant MAX_MAX_AGE = 30 days; // allow older prices on testnet (up to 30 days)
     uint256 public constant MAX_CONF_BPS = 100; // reject if confidence > 1% of price
 
     error BadPrice();
     error WideConfidence();
     error BadExponent(int32 expo);
+    error BadMaxAge(uint256 maxAge);
 
-    constructor(IPyth pyth_, bytes32 feedId_) {
+    constructor(IPyth pyth_, bytes32 feedId_, uint256 maxAge_) {
+        if (maxAge_ == 0 || maxAge_ > MAX_MAX_AGE) revert BadMaxAge(maxAge_);
         pyth = pyth_;
         feedId = feedId_;
+        maxAge = maxAge_;
     }
 
     /// @inheritdoc IOracle
     function getPrice() external view returns (uint256 priceWad, uint256 updatedAt) {
-        PythStructs.Price memory p = pyth.getPriceNoOlderThan(feedId, MAX_AGE); // reverts if stale
+        PythStructs.Price memory p = pyth.getPriceNoOlderThan(feedId, maxAge); // reverts if stale
         return toWad(p);
     }
 

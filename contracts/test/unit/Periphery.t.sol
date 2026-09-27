@@ -116,7 +116,7 @@ contract PythOracleAdapterTest is BaseTest {
     function setUp() public override {
         super.setUp();
         pyth = new MockPyth(60, 1);
-        adapter = new PythOracleAdapter(IPyth(address(pyth)), FEED);
+        adapter = new PythOracleAdapter(IPyth(address(pyth)), FEED, 60);
     }
 
     function _push(int64 price, uint64 conf, int32 expo) internal {
@@ -145,6 +145,26 @@ contract PythOracleAdapterTest is BaseTest {
         vm.warp(block.timestamp + 61);
         vm.expectRevert();
         adapter.getPrice();
+    }
+
+    function test_longerMaxAgeAcceptsOlderPricesButNotBeyondIt() public {
+        PythOracleAdapter slow = new PythOracleAdapter(IPyth(address(pyth)), FEED, 600);
+        _push(3_500e8, 1e8, -8);
+        vm.warp(block.timestamp + 300); // stale for the 60 s adapter, fine for the 600 s one
+        vm.expectRevert();
+        adapter.getPrice();
+        (uint256 p,) = slow.getPrice();
+        assertEq(p, 3_500e18);
+        vm.warp(block.timestamp + 301); // 601 s old
+        vm.expectRevert();
+        slow.getPrice();
+    }
+
+    function test_rejectsZeroOrHugeMaxAge() public {
+        vm.expectRevert(abi.encodeWithSelector(PythOracleAdapter.BadMaxAge.selector, 0));
+        new PythOracleAdapter(IPyth(address(pyth)), FEED, 0);
+        vm.expectRevert(abi.encodeWithSelector(PythOracleAdapter.BadMaxAge.selector, 30 days + 1));
+        new PythOracleAdapter(IPyth(address(pyth)), FEED, 30 days + 1);
     }
 
     function test_revertsOnWideConfidence() public {

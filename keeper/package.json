@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx --env-file=.env src/index.ts",
     "seed": "tsx scripts/seed-activity.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run test/unit",

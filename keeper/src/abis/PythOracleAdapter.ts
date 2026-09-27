@@ -12,13 +12,18 @@ export const pythOracleAdapterAbi = [
         "name": "feedId_",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "maxAge_",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "MAX_AGE",
+    "name": "MAX_CONF_BPS",
     "inputs": [],
     "outputs": [
       {
@@ -31,7 +36,7 @@ export const pythOracleAdapterAbi = [
   },
   {
     "type": "function",
-    "name": "MAX_CONF_BPS",
+    "name": "MAX_MAX_AGE",
     "inputs": [],
     "outputs": [
       {
@@ -67,6 +72,19 @@ export const pythOracleAdapterAbi = [
       },
       {
         "name": "updatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxAge",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -153,6 +171,17 @@ export const pythOracleAdapterAbi = [
         "name": "expo",
         "type": "int32",
         "internalType": "int32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadMaxAge",
+    "inputs": [
+      {
+        "name": "maxAge",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

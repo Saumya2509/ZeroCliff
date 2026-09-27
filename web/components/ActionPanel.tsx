@@ -68,8 +68,8 @@ function OpenPositionForm({
   const h = c && price ? health(c, d, price) : undefined;
   const limit = c && price ? maxBorrow(c, 0n, price) : undefined;
 
-  const colError = !c || c === 0n ? "Enter how much mETH to deposit." : need > meth ? `You need ${formatToken(need, "mETH")}${withGhost ? " (half for the ghost)" : ""}. Use “Get test tokens” first.` : undefined;
-  const debtError = h !== undefined && d > 0n && h < H_OPEN ? `Health would be ${formatHealth(h)}. Borrow at most ${formatToken(limit ?? 0n, "mUSD")} to stay above 1.40.` : undefined;
+  const colError = !c || c === 0n ? "Enter collateral amount." : need > meth ? `Requires ${formatToken(need, "mETH")}. Claim test tokens first.` : undefined;
+  const debtError = h !== undefined && d > 0n && h < H_OPEN ? `Health ${formatHealth(h)} below 1.40 limit (max ${formatToken(limit ?? 0n, "mUSD")}).` : undefined;
   const invalid = !!colError || !!debtError || !price;
 
   const update = (col: string, debt: string) => {
@@ -77,6 +77,20 @@ function OpenPositionForm({
     setDebtIn(debt);
     onDraftChange({ collateral: parseAmount(col) ?? 0n, debt: parseAmount(debt) ?? 0n });
   };
+
+  const colChips = [
+    { label: "25%", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 8n : meth / 4n), debtIn) },
+    { label: "50%", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 4n : meth / 2n), debtIn) },
+    { label: "75%", onClick: () => meth > 0n && update(formatInput(withGhost ? (meth * 3n) / 8n : (meth * 3n) / 4n), debtIn) },
+    { label: "MAX", onClick: () => meth > 0n && update(formatInput(withGhost ? meth / 2n : meth), debtIn) },
+  ];
+
+  const debtChips = limit && limit > 0n ? [
+    { label: "25%", onClick: () => update(colIn, formatInput(limit / 4n)) },
+    { label: "50%", onClick: () => update(colIn, formatInput(limit / 2n)) },
+    { label: "75%", onClick: () => update(colIn, formatInput((limit * 3n) / 4n)) },
+    { label: "MAX SAFE", onClick: () => update(colIn, formatInput(limit)) },
+  ] : undefined;
 
   const submit = () => {
     if (invalid || !c) return;
@@ -87,10 +101,10 @@ function OpenPositionForm({
     if (d > 0n) steps.push({ label: `Borrow ${formatToken(d, "mUSD")}`, run: () => send({ ...pool, functionName: "borrow", args: [d], account: user }) });
     if (withGhost) {
       steps.push(
-        { label: "Ghost: approve mETH for the cliff pool", run: () => approveIfNeeded(mETH.address, cliff.address, c, user) },
-        { label: "Ghost: deposit the same amount", run: () => send({ ...cliff, functionName: "deposit", args: [c], account: user }) },
+        { label: "Ghost: approve mETH", run: () => approveIfNeeded(mETH.address, cliff.address, c, user) },
+        { label: "Ghost: deposit", run: () => send({ ...cliff, functionName: "deposit", args: [c], account: user }) },
       );
-      if (d > 0n) steps.push({ label: "Ghost: borrow the same amount", run: () => send({ ...cliff, functionName: "borrow", args: [d], account: user }) });
+      if (d > 0n) steps.push({ label: "Ghost: borrow", run: () => send({ ...cliff, functionName: "borrow", args: [d], account: user }) });
     }
     tx.run(steps);
   };
@@ -102,23 +116,61 @@ function OpenPositionForm({
         submit();
       }}
       noValidate
+      className="space-y-4"
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <AmountField id={ids.col} helpId={ids.colHelp} label="Collateral" unit="mETH" value={colIn} onChange={(v) => update(v, debtIn)} error={colError}
-          help={`In wallet: ${formatToken(meth, "mETH")}`} />
-        <AmountField id={ids.debt} helpId={ids.debtHelp} label="Borrow" unit="mUSD" value={debtIn} onChange={(v) => update(colIn, v)} error={debtError}
-          help={h !== undefined ? `Health after: ${formatHealth(h)} (must stay ≥ 1.40)` : "Borrowing is optional"} />
+      <div className="space-y-4">
+        <AmountField
+          id={ids.col}
+          helpId={ids.colHelp}
+          label="Deposit Collateral"
+          unit="mETH"
+          value={colIn}
+          onChange={(v) => update(v, debtIn)}
+          error={colError}
+          help={`Available in wallet: ${formatToken(meth, "mETH")}`}
+          chips={colChips}
+        />
+        <AmountField
+          id={ids.debt}
+          helpId={ids.debtHelp}
+          label="Borrow Amount"
+          unit="mUSD"
+          value={debtIn}
+          onChange={(v) => update(colIn, v)}
+          error={debtError}
+          help={h !== undefined ? `Health: ${formatHealth(h)} (Safe limit: ≥ 1.40)` : "Borrowing is optional"}
+          chips={debtChips}
+        />
       </div>
-      <div className="mt-4 flex items-start gap-3">
-        <input id={ids.ghost} type="checkbox" checked={withGhost} onChange={(e) => setWithGhost(e.target.checked)} className="mt-1 h-5 w-5 accent-[var(--safe)]" />
-        <label htmlFor={ids.ghost} className="text-sm">
-          Open a ghost position for comparison
-          <span className="block text-muted">Same amounts in a normal (cliff) pool, so you can watch what it would do to you.</span>
-        </label>
+
+      {/* Ghost Twin Switch */}
+      <div className="flex items-center justify-between rounded-lg border border-border/80 bg-surface/40 p-3">
+        <div className="space-y-0.5">
+          <label htmlFor={ids.ghost} className="flex items-center gap-1.5 text-xs font-semibold text-text cursor-pointer">
+            <span className="text-safe">✦</span> Mirror Ghost Position (Classic Cliff)
+          </label>
+          <p className="text-[11px] text-muted">
+            Duplicates position in a classic pool to compare live liquidation vs glide.
+          </p>
+        </div>
+        <input
+          id={ids.ghost}
+          type="checkbox"
+          checked={withGhost}
+          onChange={(e) => setWithGhost(e.target.checked)}
+          className="h-4 w-4 rounded accent-[var(--safe)] cursor-pointer"
+        />
       </div>
-      <Button type="submit" variant="primary" className="mt-4 w-full sm:w-auto" disabled={invalid || tx.running}>
-        {tx.running ? "Opening…" : "Open position"}
+
+      <Button
+        type="submit"
+        variant="primary"
+        className="w-full justify-center py-2.5 font-semibold text-sm active:scale-[0.98] transition-transform"
+        disabled={invalid || tx.running}
+      >
+        {tx.running ? "Executing Onchain (2s)…" : "Open Position & Launch Ghost"}
       </Button>
+
       <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
     </form>
   );
@@ -152,19 +204,26 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
   const error = (() => {
     if (!amount) return undefined;
     if (!amt || amt === 0n) return "Enter an amount above zero.";
-    if (tab === "deposit" && amt > meth) return "More than you have in your wallet. Use “Get test tokens” first.";
-    if (tab === "repay" && amt > musd) return "More mUSD than you have in your wallet.";
-    if (tab === "repay" && d === 0n) return "You have no debt to repay.";
-    if (tab === "withdraw" && amt > c) return "More than your collateral.";
+    if (tab === "deposit" && amt > meth) return "Exceeds wallet balance.";
+    if (tab === "repay" && amt > musd) return "Exceeds wallet balance.";
+    if (tab === "repay" && d === 0n) return "No debt to repay.";
+    if (tab === "withdraw" && amt > c) return "Exceeds collateral balance.";
     if ((tab === "borrow" || tab === "withdraw") && d + (tab === "borrow" ? amt : 0n) > 0n && after !== undefined && after < H_OPEN)
-      return `Health would be ${formatHealth(after)}. Stay above 1.40 (max ${formatToken(max, unit)}).`;
+      return `Health would drop to ${formatHealth(after)} (limit ≥ 1.40).`;
     return undefined;
   })();
 
   const help = (() => {
-    const base = `Available: ${formatToken(max, unit)}`;
-    return after !== undefined ? `${base} · health after: ${formatHealth(after)}` : base;
+    const base = `Max: ${formatToken(max, unit)}`;
+    return after !== undefined ? `${base} · Health after: ${formatHealth(after)}` : base;
   })();
+
+  const quickChips = max > 0n ? [
+    { label: "25%", onClick: () => setAmount(formatInput(max / 4n)) },
+    { label: "50%", onClick: () => setAmount(formatInput(max / 2n)) },
+    { label: "75%", onClick: () => setAmount(formatInput((max * 3n) / 4n)) },
+    { label: "MAX", onClick: () => setAmount(formatInput(max)) },
+  ] : undefined;
 
   const submit = () => {
     if (!amt || error) return;
@@ -195,7 +254,7 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
 
   return (
     <div>
-      <div role="tablist" aria-label="Position actions" className="flex gap-1 overflow-x-auto border-b border-border">
+      <div role="tablist" aria-label="Position actions" className="flex gap-1 overflow-x-auto border-b border-border pb-1">
         {TABS.map((t, i) => (
           <button
             key={t.id}
@@ -213,46 +272,40 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
               setAmount("");
               tx.reset();
             }}
-            className={`-mb-px min-h-11 cursor-pointer border-b-2 px-4 text-sm transition-colors duration-150 ${
-              tab === t.id ? "border-safe font-medium text-text" : "border-transparent text-muted hover:text-text"
+            className={`min-h-9 cursor-pointer rounded-lg px-3 text-xs font-semibold transition-all ${
+              tab === t.id ? "bg-safe/10 text-safe border border-safe/30" : "text-muted hover:text-text hover:bg-surface/50"
             }`}
           >
             {t.label}
           </button>
         ))}
       </div>
+
       <form
         id={ids.panel}
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
-        className="pt-4"
-        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
+        noValidate
+        className="mt-4 space-y-4"
       >
         <AmountField
           id={ids.input}
           helpId={ids.help}
-          label={`${TABS.find((t) => t.id === tab)!.label} amount`}
+          label={`${tab.slice(0, 1).toUpperCase()}${tab.slice(1)} Amount`}
           unit={unit}
           value={amount}
           onChange={setAmount}
           error={error}
           help={help}
-          action={
-            <Button type="button" variant="quiet" className="min-h-9 px-2 text-xs underline underline-offset-4" onClick={() => setAmount(formatInput(max))}>
-              Max
-            </Button>
-          }
+          chips={quickChips}
         />
-        <Button type="submit" variant="primary" className="mt-4 w-full sm:w-auto" disabled={!amt || !!error || tx.running}>
-          {tx.running ? "Working…" : TABS.find((t) => t.id === tab)!.label}
+        <Button type="submit" variant="primary" className="w-full justify-center py-2.5 active:scale-[0.98] transition-transform" disabled={!amt || !!error || tx.running}>
+          {tx.running ? "Settling (2s)…" : `${tab.slice(0, 1).toUpperCase()}${tab.slice(1)}`}
         </Button>
-        {!hasGhost && tab === "deposit" && (
-          <p className="mt-3 text-sm text-muted">This position has no ghost. The comparison chart needs one opened at the same time.</p>
-        )}
         <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
       </form>
     </div>
@@ -276,6 +329,7 @@ function AmountField({
   error,
   help,
   action,
+  chips,
 }: {
   id: string;
   helpId: string;
@@ -286,17 +340,18 @@ function AmountField({
   error?: string;
   help?: string;
   action?: ReactNode;
+  chips?: { label: string; onClick: () => void }[];
 }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <label htmlFor={id} className="text-sm font-medium">
+        <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wider text-muted">
           {label}
         </label>
         {action}
       </div>
       <div
-        className={`mt-1 flex items-center rounded-sm border bg-surface focus-within:outline focus-within:outline-2 focus-within:outline-focus ${
+        className={`mt-1.5 flex items-center rounded-lg border bg-surface/60 focus-within:border-safe focus-within:ring-1 focus-within:ring-safe transition-all ${
           error ? "border-glide" : "border-border"
         }`}
       >
@@ -308,14 +363,37 @@ function AmountField({
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={!!error}
           aria-describedby={helpId}
-          className="num min-h-11 w-full min-w-0 bg-transparent px-3 text-base outline-none"
+          className="num min-h-10 w-full min-w-0 bg-transparent px-3 text-sm outline-none font-mono"
           placeholder="0.00"
         />
-        <span className="px-3 text-sm text-muted">{unit}</span>
+        <span className="px-3 font-mono text-xs font-semibold text-muted">{unit}</span>
       </div>
-      <p id={helpId} className={`num mt-1 text-sm ${error ? "text-glide" : "text-muted"}`} role={error ? "alert" : undefined}>
-        {error ?? help}
-      </p>
+
+      {chips && chips.length > 0 && (
+        <div className="mt-1.5 flex items-center justify-between">
+          <p id={helpId} className={`num text-[11px] ${error ? "text-glide font-medium" : "text-muted"}`} role={error ? "alert" : undefined}>
+            {error ?? help}
+          </p>
+          <div className="flex gap-1">
+            {chips.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={c.onClick}
+                className="rounded border border-border/80 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-muted hover:border-safe hover:text-text active:scale-95 transition-all"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(!chips || chips.length === 0) && (
+        <p id={helpId} className={`num mt-1 text-[11px] ${error ? "text-glide font-medium" : "text-muted"}`} role={error ? "alert" : undefined}>
+          {error ?? help}
+        </p>
+      )}
     </div>
   );
 }

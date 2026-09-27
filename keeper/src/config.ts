@@ -26,8 +26,8 @@ export const configSchema = z.object({
   ARB_BUDGET_BPS: z.coerce.number().int().min(1).max(10_000).default(200),
   ARB_THRESHOLD_BPS: z.coerce.number().int().min(0).default(30),
 
-  // Since the Pyth Core upgrade (26 Aug 2026) Hermes serves price updates only with an API key (Pyth Terminal).
-  HERMES_URL: z.url().default("https://pyth.dourolabs.app/hermes"),
+  // Public Hermes endpoint does not require an API key. PYTH_API_KEY is optional for custom gateways.
+  HERMES_URL: z.url().default("https://hermes.pyth.network"),
   PYTH_API_KEY: z.string().optional(),
   ORACLE_PUSH_EVERY_S: z.coerce.number().int().min(1).default(30),
 

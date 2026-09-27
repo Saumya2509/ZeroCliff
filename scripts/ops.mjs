@@ -365,6 +365,7 @@ const tasks = {
         PYTH_ETH_USD_FEED_ID: env.PYTH_ETH_USD_FEED_ID,
         ...(env.KEEPER_ADDRESS ? { KEEPER_ADDRESS: env.KEEPER_ADDRESS } : {}),
         ...(env.START_PRICE ? { START_PRICE: env.START_PRICE } : {}),
+        ...(env.PYTH_MAX_AGE ? { PYTH_MAX_AGE: env.PYTH_MAX_AGE } : {}),
       },
     });
     tasks.abis();

@@ -8,6 +8,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { arbitrumSepolia, baseSepolia, foundry, sepolia } from "viem/chains";
 import type { Config } from "./config";
 import type { Ctx } from "./context";
+import { pythOracleAdapterAbi } from "./abis";
 import { loadDeployments, type Deployments } from "./deployments";
 import { runArbitrageur } from "./jobs/arbitrageur";
 import { runGhostLiquidator } from "./jobs/ghostLiquidator";
@@ -46,16 +47,23 @@ export async function startKeeper(cfg: Config, opts: { logger?: Logger; deployme
 
   const jobs = {
     glider: cfg.ENABLE_GLIDER,
-    oraclePusher: cfg.ENABLE_ORACLE_PUSHER && cfg.MODE === "live" && d.oracleMode === "pyth",
+    // Pushing needs a Hermes API key; without one the keeper relies on Pyth's own scheduled pushes.
+    oraclePusher: cfg.ENABLE_ORACLE_PUSHER && cfg.MODE === "live" && d.oracleMode === "pyth" && !!cfg.PYTH_API_KEY,
     ghostLiquidator: cfg.ENABLE_GHOST_LIQUIDATOR,
     arbitrageur: cfg.ENABLE_ARBITRAGEUR,
   };
   log.info({ keeper: account.address, chainId: cfg.CHAIN_ID, mode: cfg.MODE, oracle: d.oracleMode, jobs }, "starting");
-  if (jobs.oraclePusher && !cfg.PYTH_API_KEY) {
-    log.warn(
-      { hermes: cfg.HERMES_URL },
-      "PYTH_API_KEY is not set: Hermes refuses price updates without one (Pyth Core upgrade, Aug 2026), so pushes will fail with 401. Get a key from Pyth Terminal.",
-    );
+  if (cfg.MODE === "live" && d.oracleMode === "pyth" && !jobs.oraclePusher) {
+    // No pushes from us: the adapter must accept prices as old as Pyth's own push interval.
+    const maxAge = await pub
+      .readContract({ address: d.pythAdapter, abi: pythOracleAdapterAbi, functionName: "maxAge" })
+      .catch(() => undefined);
+    const note = { maxAgeS: maxAge?.toString() ?? "unknown", pythApiKey: !!cfg.PYTH_API_KEY };
+    if (maxAge !== undefined && maxAge < 300n) {
+      log.warn(note, "oracle pusher is off but the adapter only accepts prices up to maxAge old; Pyth's own pushes are minutes apart, so reads will go stale. Set PYTH_API_KEY, or deploy with PYTH_MAX_AGE=600.");
+    } else {
+      log.info(note, "oracle pusher off: relying on Pyth's scheduled price pushes within the adapter's maxAge");
+    }
   }
 
   const head = await registry.backfill();
