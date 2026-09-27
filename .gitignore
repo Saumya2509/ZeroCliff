@@ -56,3 +56,4 @@ offline/pids.json
 offline/seed-keys.json
 contracts/deployments/31337.json
 contracts/broadcast/*/31337/
+contracts/broadcast/*/*/dry-run/
