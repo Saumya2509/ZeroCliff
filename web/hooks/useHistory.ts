@@ -135,8 +135,9 @@ export function useHistory(user?: Address) {
 
   const q = useQuery({
     queryKey: key,
-    enabled: !!user && !!client && isDeployed,
-    refetchInterval: 10_000,
+    enabled: Boolean(user) && !!client && isDeployed,
+    refetchInterval: user ? 10_000 : false,
+    gcTime: 0,
     queryFn: async (): Promise<History> => {
       if (INDEXER_URL) {
         try {
@@ -161,6 +162,10 @@ export function useHistory(user?: Address) {
   useWatchContractEvent({ ...pool, eventName: "Glided", args: { user }, enabled: !!user && isDeployed, onLogs: refresh });
   useWatchContractEvent({ ...pool, eventName: "BackstopLiquidated", args: { user }, enabled: !!user && isDeployed, onLogs: refresh });
   useWatchContractEvent({ ...cliff, eventName: "Liquidated", args: { user }, enabled: !!user && isDeployed, onLogs: refresh });
+
+  if (!user) {
+    return { ...q, data: undefined };
+  }
 
   return q;
 }

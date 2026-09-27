@@ -252,6 +252,18 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
     tabRefs.current[next]?.focus();
   };
 
+  const closePosition = () => {
+    const steps: TxStep[] = [];
+    if (d > 0n) {
+      steps.push({ label: "Approve mUSD", run: () => approveIfNeeded(mUSD.address, pool.address, d, user) });
+      steps.push({ label: `Repay ${formatToken(d, "mUSD")}`, run: () => send({ ...pool, functionName: "repay", args: [d], account: user }) });
+    }
+    if (c > 0n) {
+      steps.push({ label: `Withdraw ${formatToken(c, "mETH")}`, run: () => send({ ...pool, functionName: "withdraw", args: [c], account: user }) });
+    }
+    tx.run(steps).then((ok) => ok && setAmount(""));
+  };
+
   return (
     <div>
       <div role="tablist" aria-label="Position actions" className="flex gap-1 overflow-x-auto border-b border-border pb-1">
@@ -308,6 +320,18 @@ function ManageTabs({ user, soft, hasGhost, price }: { user: Address; soft: Posi
         </Button>
         <TxProgress steps={tx.steps} error={tx.error} onRetry={submit} />
       </form>
+
+      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs">
+        <span className="text-muted">Want to reset and start fresh?</span>
+        <button
+          type="button"
+          onClick={closePosition}
+          disabled={tx.running}
+          className="text-xs font-semibold text-muted hover:text-rose-400 underline underline-offset-2 transition-colors disabled:opacity-50"
+        >
+          {tx.running ? "Closing…" : "Close & Repay Full Position"}
+        </button>
+      </div>
     </div>
   );
 }

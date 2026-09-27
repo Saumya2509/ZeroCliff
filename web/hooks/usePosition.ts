@@ -24,11 +24,27 @@ export function usePosition(user?: Address) {
       { ...cliff, functionName: "positions", args: [user!] },
       { ...cliff, functionName: "healthOf", args: [user!] },
     ],
-    query: { enabled: !!user && isDeployed, refetchInterval: REFRESH },
+    query: {
+      enabled: Boolean(user) && isDeployed,
+      refetchInterval: user ? REFRESH : false,
+      gcTime: 0,
+    },
   });
+
+  if (!user) {
+    return {
+      ...q,
+      data: undefined,
+      soft: undefined,
+      ghost: undefined,
+      hasPosition: false,
+      hasGhost: false,
+    };
+  }
+
   const d = q.data;
-  const soft = d ? asPosition(d[0].result, d[1].result) : undefined;
-  const ghost = d ? asPosition(d[2].result, d[3].result) : undefined;
+  const soft = d ? asPosition(d[0]?.result, d[1]?.result) : undefined;
+  const ghost = d ? asPosition(d[2]?.result, d[3]?.result) : undefined;
   return {
     ...q,
     soft,
@@ -62,8 +78,26 @@ export function useBalances(user?: Address) {
       { ...mETH, functionName: "allowance", args: [user!, cliff.address] },
       { ...mETH, functionName: "lastClaim", args: [user!] },
     ],
-    query: { enabled: !!user && isDeployed, refetchInterval: REFRESH },
+    query: {
+      enabled: Boolean(user) && isDeployed,
+      refetchInterval: user ? REFRESH : false,
+      gcTime: 0,
+    },
   });
+
+  if (!user) {
+    return {
+      ...q,
+      data: undefined,
+      meth: 0n,
+      musd: 0n,
+      methAllowancePool: 0n,
+      musdAllowancePool: 0n,
+      methAllowanceCliff: 0n,
+      lastClaim: 0n,
+    };
+  }
+
   const r = (i: number) => (q.data?.[i]?.result as bigint | undefined) ?? 0n;
   return {
     ...q,
