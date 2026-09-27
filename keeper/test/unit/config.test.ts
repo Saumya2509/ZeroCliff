@@ -14,6 +14,12 @@ describe("config", () => {
     expect(c).toMatchObject({ CHAIN_ID: 31337, BATCH_SIZE: 20, ARB_ALPHA_BPS: 3_000, ARB_BUDGET_BPS: 200, ENABLE_GLIDER: true });
   });
 
+  it("points at the authenticated Hermes and takes an optional API key", () => {
+    expect(loadConfig(base).HERMES_URL).toBe("https://pyth.dourolabs.app/hermes");
+    expect(loadConfig(base).PYTH_API_KEY).toBeUndefined();
+    expect(loadConfig({ ...base, PYTH_API_KEY: "k" }).PYTH_API_KEY).toBe("k");
+  });
+
   it('parses "false" as false (z.coerce.boolean would not)', () => {
     const c = loadConfig({ ...base, ENABLE_GHOST_LIQUIDATOR: "false", ENABLE_ARBITRAGEUR: "0", ENABLE_ORACLE_PUSHER: "true" });
     expect(c.ENABLE_GHOST_LIQUIDATOR).toBe(false);

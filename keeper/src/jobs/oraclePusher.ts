@@ -31,7 +31,8 @@ export async function pushOracle(ctx: Ctx, block: bigint, wait = false) {
   if (ctx.d.oracleMode !== "pyth") return;
   const adapter = { address: ctx.d.pythAdapter, abi: pythOracleAdapterAbi } as const;
   try {
-    hermes ??= new HermesClient(ctx.cfg.HERMES_URL);
+    // the client sends the key as "Authorization: Bearer <key>"
+    hermes ??= new HermesClient(ctx.cfg.HERMES_URL, { accessToken: ctx.cfg.PYTH_API_KEY || undefined });
     const [feedId, pyth] = await Promise.all([
       ctx.pub.readContract({ ...adapter, functionName: "feedId" }),
       ctx.pub.readContract({ ...adapter, functionName: "pyth" }),

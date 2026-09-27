@@ -51,6 +51,12 @@ export async function startKeeper(cfg: Config, opts: { logger?: Logger; deployme
     arbitrageur: cfg.ENABLE_ARBITRAGEUR,
   };
   log.info({ keeper: account.address, chainId: cfg.CHAIN_ID, mode: cfg.MODE, oracle: d.oracleMode, jobs }, "starting");
+  if (jobs.oraclePusher && !cfg.PYTH_API_KEY) {
+    log.warn(
+      { hermes: cfg.HERMES_URL },
+      "PYTH_API_KEY is not set: Hermes refuses price updates without one (Pyth Core upgrade, Aug 2026), so pushes will fail with 401. Get a key from Pyth Terminal.",
+    );
+  }
 
   const head = await registry.backfill();
   registry.watch(head + 1n);

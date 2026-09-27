@@ -26,9 +26,11 @@ Needs a deployment record (`../contracts/deployments/active.json`). The keeper w
 npm install
 # local / offline (anvil; Pyth pusher off). Anvil must produce blocks, e.g. `anvil --block-time 2`.
 MODE=offline RPC_URL=http://127.0.0.1:8545 CHAIN_ID=31337 KEEPER_PRIVATE_KEY=0x… npm start
-# public testnet
-MODE=live RPC_URL=$TESTNET_RPC CHAIN_ID=<id> KEEPER_PRIVATE_KEY=0x… npm start
+# public testnet (the oracle pusher needs a Pyth API key, see below)
+MODE=live RPC_URL=$TESTNET_RPC CHAIN_ID=<id> KEEPER_PRIVATE_KEY=0x… PYTH_API_KEY=… npm start
 ```
+
+**Pyth API key.** Since the Pyth Core upgrade (26 August 2026), Hermes serves signed price updates only with an API key, from Pyth Terminal (free trial, then paid). The keeper sends it as `Authorization: Bearer` to `https://pyth.dourolabs.app/hermes`. On Base Sepolia, Pyth's own pushes of ETH/USD were about 4 minutes apart when we checked, while the adapter accepts prices at most 60 s old. So the pusher, and therefore the key, is required there. Without a key the keeper warns at start-up.
 
 All settings are in `.env.example`. Logs are JSON (pino) with `job`, `block`, `count` and `hash`. Every 60 s a summary prints blocks seen and skipped, pokes, router skips, liquidations, arb swaps and the gas balance, with a warning below `LOW_GAS_ETH`. `GET :8081/health` returns the last processed block (503 until the first one). A `Dockerfile` is included for Railway, Render or a VPS.
 
